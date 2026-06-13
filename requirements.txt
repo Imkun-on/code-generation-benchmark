@@ -1,0 +1,114 @@
+# ============================================================
+# Claude Code Generation Benchmark (HumanEval) — requirements.txt
+# Python 3.10+  (testato su 3.14 / Windows 11)
+# ============================================================
+#
+# Il progetto valuta la generazione di codice su HumanEval/MBPP/DS-1000/Plot2Code
+# con metriche pass@1 + CodeBLEU, confrontando per ARCHITETTURA un modello per
+# famiglia: Claude Opus 4.7 (LLM dense), DeepSeek V4 Pro (MoE), Mistral
+# Ministral 8B (SLM). Le dipendenze qui sotto sono solo quelle importate dal
+# codice. (NB: pandas/numpy/scipy/sklearn/torch servono SOLO per eseguire
+# DS-1000 e NON sono qui: installale a parte, vedi README.)
+#
+# Plot2Code: input testuale (`instruction`) -> codice matplotlib. Richiede
+# matplotlib + Pillow (per renderizzare e salvare le figure). Il confronto
+# immagini (model/image_similarity.py) è un COMPOSITO deterministico:
+#   - SSIM (struttura) e istogramma colori -> solo numpy + scipy (niente
+#     scikit-image: su Python 3.14/Windows non ha wheel affidabili);
+#   - text_match (titoli/assi/legenda) -> OCR via `pytesseract`, che però
+#     richiede il MOTORE Tesseract installato a parte (UB Mannheim build su
+#     Windows). Senza il motore la sola componente testo resta None: SSIM e
+#     colore (e quindi il composito) si calcolano comunque.
+# Nessuno di questi è elencato qui: installa matplotlib/Pillow/numpy/scipy (e,
+# se vuoi text_match, il motore Tesseract). Il download HF su Windows richiede
+# HF_HUB_DISABLE_SYMLINKS=1 (impostato nel loader); consigliato `pip install
+# hf_xet` per un download molto più veloce.
+
+# --- Caricamento dei benchmark da Hugging Face (HumanEval/MBPP/DS-1000/
+#     Plot2Code/MultiPL-E) ---
+datasets>=2.18
+huggingface-hub>=0.23
+
+# MultiPL-E (nuprl/MultiPL-E, set HumanEval): benchmark multilinguaggio di SOLA
+# esecuzione (niente soluzione gold -> niente CodeBLEU, solo pass@1). UN solo
+# benchmark `multipl-e` con TUTTI i 24 linguaggi insieme (colonna `language`); si
+# carica con `datasets` (un config `humaneval-<lang>` per linguaggio). Per il pass@1
+# serve il RUNTIME del linguaggio nel PATH; se manca, l'executor segnala
+# `RuntimeMissing` e prosegue. Linguaggi che ESEGUONO oggi: js (Node.js), php (php
+# CLI), r (Rscript; l'installer Windows non lo mette nel PATH -> fallback glob in
+# C:\Program Files\R\R-*\bin), java (JDK: javac+java, gira con `java -ea`, molti
+# problemi importano org.javatuples -> jar in lib/, nel classpath), cpp (g++ se
+# installato). Gli altri (go/rust/c#/swift/scala/haskell/…) -> RuntimeMissing finché
+# non installi il toolchain. Il jar javatuples si scarica una volta:
+#   Invoke-WebRequest https://repo1.maven.org/maven2/org/javatuples/javatuples/1.2/javatuples-1.2.jar -OutFile lib\javatuples-1.2.jar
+#
+# Toolchain per allargare il pass@1 (batch "mainstream", installati via winget il
+# 2026-06-08). Hanno un handler dedicato in executor.py: Go, Rust, C#, Dart (+ C++
+# via clang di LLVM); JS/TS/Ruby/Julia/Lua girano dal registro `_MULTIPLE_INTERP`.
+#   winget install -e --id GoLang.Go
+#   winget install -e --id Rustlang.Rust.GNU         # toolchain GNU: include il linker
+#   winget install -e --id Microsoft.DotNet.SDK.8    # C# (dotnet)
+#   winget install -e --id Google.DartSDK
+#   winget install -e --id RubyInstallerTeam.Ruby.3.4
+#   winget install -e --id Julialang.Julia
+#   winget install -e --id BrechtSanders.WinLibs.POSIX.UCRT   # g++ MinGW per C++
+#   winget install -e --id StrawberryPerl.StrawberryPerl      # Perl con Test::Deep
+#   winget install -e --id DEVCOM.Lua                         # Lua 5.4 (+ luarocks)
+#   luarocks install luaunit                                  # modulo Lua dei test
+# NB TypeScript: lo eseguiamo con Node (>=23.6, type-stripping), NON con Deno — i
+# test MultiPL-E usano `require('node:assert')`, API di Node. NB C++: serve un g++
+# vero con stdlib (WinLibs/MinGW); clang++ di LLVM su Windows NON basta (manca la
+# libreria standard → 'assert.h' not found). NB Perl: il perl minimale di Git non ha
+# `cpan`/`Test::Deep` → Strawberry Perl. NB Lua: i test usano `luaunit` (luarocks);
+# luarocks installa in ~/.luarocks, che il lua di default non cerca → l'executor
+# imposta LUA_PATH/LUA_CPATH automaticamente.
+# Dopo l'installazione RIAVVIA il terminale/Claude Code (winget aggiorna il PATH ma
+# serve una shell nuova).
+
+# --- SDK Claude (Anthropic) ---
+anthropic>=0.105            # Opus 4.7: output_config={"effort"}, thinking adaptive/disabled
+
+# --- Client OpenAI-compatibile per i modelli di confronto (DeepSeek MoE, Mistral SLM) ---
+# Stesso SDK, cambiano solo base_url + chiave (vedi model/claude.py).
+openai>=1.40
+
+# --- Metrica strutturale CodeBLEU (AST + data-flow) ---
+# ATTENZIONE ordine di installazione su Python 3.14:
+#   codebleu fissa tree-sitter<0.23 (senza wheel cp314 -> build da sorgente fallisce).
+#   Installa PRIMA tree-sitter + tree-sitter-python, POI codebleu con --no-deps:
+#       pip install tree-sitter tree-sitter-python
+#       pip install codebleu --no-deps
+#   A runtime codebleu 0.7 funziona con tree-sitter 0.25 nonostante il pin.
+codebleu>=0.7
+tree-sitter>=0.25           # wheel cp314 disponibile (0.25.2)
+tree-sitter-python>=0.23    # grammatica Python per CodeBLEU (gli altri benchmark
+                            # con gold sono in Python; MultiPL-E non usa CodeBLEU)
+
+# --- Export Excel (foglio Dettaglio) ---
+openpyxl>=3.1
+
+# --- CLI: parsing argomenti (Typer) + tabelle/barra/pannelli (Rich) ---
+# Typer costruisce la CLI dai type-hint e genera un --help formattato con Rich
+# (opzioni raggruppate in pannelli); Rich è usato anche per menù, tabelle e
+# pannelli di avanzamento/riepilogo. Typer porta con sé click; rich è esplicito.
+typer>=0.12
+rich>=13.0
+
+# --- Caricamento della API key da file .env ---
+python-dotenv>=1.0
+
+# --- Analisi dei risultati (notebook Jupyter, cartella analysis/) ---
+# Carica i file in results/ e produce le tabelle + i grafici del README
+# (sezione "Analisi dei Risultati"). plotnine = grammatica dei grafici stile
+# ggplot; pandas/numpy per i dati; matplotlib + Pillow per il grafico MultiPL-E
+# con le icone dei linguaggi. nbformat serve a build_notebook.py per generare il
+# .ipynb. NB: con piu' interpreti Python nel PATH, registra un kernel con path
+# assoluto, altrimenti Jupyter potrebbe usare un Python senza queste librerie:
+#   python -m ipykernel install --user --name py314-eval
+jupyterlab>=4.0
+nbformat>=5.9
+plotnine>=0.13
+pandas>=2.0
+numpy>=1.26
+matplotlib>=3.8
+pillow>=10.0

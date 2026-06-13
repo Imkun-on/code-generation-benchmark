@@ -1,0 +1,25 @@
+# --- Segreti: MAI committare le API key ---
+.env
+.env.*
+
+# --- Dataset scaricati (rigenerabili dai loader) e dati di test pesanti ---
+# In particolare Benchmark/scicode/testdata/test_data.h5 (~1 GB, oltre il limite
+# di 100 MB di GitHub). Gli altri dataset si riscaricano al primo run.
+Benchmark/
+
+# --- Output dei run ---
+results/
+
+# --- Config locale di Claude Code (personale, non condivisa) ---
+.claude/settings.local.json
+
+# --- Cache / build Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Eventuali artefatti lasciati da esecuzioni (ora isolati nell'executor) ---
+*.pt
+*.h5
