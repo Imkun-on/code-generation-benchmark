@@ -27,8 +27,8 @@
 </div>
 
 ```bash
-git clone https://github.com/Imkun-on/Claude-Coding-Evaluation.git
-cd Claude-Coding-Evaluation
+git clone https://github.com/Imkun-on/code-generation-benchmark.git
+cd code-generation-benchmark
 pip install -r requirements.txt
 python cli.py
 ```
@@ -373,7 +373,7 @@ The generation parameters live in `model/config.py`:
 `model/` is a **namespace package** (deliberately without `__init__.py`), with flat files:
 
 ```
-Model_Test_Benchmark/
+code-generation-benchmark/
 ├── cli.py                  # entrypoint: argument parsing + run_benchmark
 ├── requirements.txt
 ├── Benchmark/humaneval/    # HumanEval dataset saved locally (save_to_disk)
