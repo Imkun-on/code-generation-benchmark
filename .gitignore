@@ -7,8 +7,14 @@
 # di 100 MB di GitHub). Gli altri dataset si riscaricano al primo run.
 Benchmark/
 
-# --- Output dei run ---
-results/
+# --- Output dei run: pubblicati come PROVA dei risultati ---
+# Versioniamo i risultati finali (json/csv/xlsx, record per problema: codice
+# generato, pass@1, CodeBLEU, token). Escludiamo i file di servizio: i checkpoint
+# di ripresa (.jsonl), i backup (.bak) e i PNG renderizzati di Plot2Code (pesanti
+# e rigenerabili dal codice). Benchmark/ resta escluso (dataset riscaricabili).
+results/**/*.jsonl
+results/**/*.bak
+results/**/rendered/
 
 # --- Config locale di Claude Code (personale, non condivisa) ---
 .claude/settings.local.json
