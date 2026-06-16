@@ -1,18 +1,18 @@
 """
-providers.py — Modelli da testare (uno per architettura) e chiamata alle API.
+providers.py — Models to test (one per architecture) and the API calls.
 
-Raccoglie in un SOLO posto la parte specifica del modello/provider; tutto il
-resto della pipeline (loader, prompting, executor, metriche, report, export) è
-condiviso e agnostico al modello — così il confronto LLM vs MoE vs SLM è equo
-(stesso prompt, stessa esecuzione, stesse metriche per tutti).
+Gathers in a SINGLE place the model/provider-specific part; all the rest of the
+pipeline (loaders, prompting, executor, metrics, report, export) is shared and
+model-agnostic — so the LLM vs MoE vs SLM comparison is fair (same prompt, same
+execution, same metrics for all).
 
-  MODELS / ALL_MODELS            i modelli registrati (un ModelSpec per modello)
-  generate(spec, prompt)         la chiamata API, smistata per provider
-  require_key / models_by_keys   utilità su chiavi e selezione dei modelli
+  MODELS / ALL_MODELS            the registered models (one ModelSpec per model)
+  generate(spec, prompt)         the API call, dispatched by provider
+  require_key / models_by_keys   helpers for keys and model selection
 
-Provider: Anthropic (SDK proprio) e provider con API OpenAI-compatibile
-(DeepSeek, Mistral) tramite l'unico client `openai` (cambiano solo base_url e
-chiave).
+Providers: Anthropic (its own SDK) and providers with an OpenAI-compatible API
+(DeepSeek, Mistral) through the single `openai` client (only base_url and key
+change).
 """
 
 import os
@@ -45,7 +45,7 @@ OPENAI_COMPATIBLE_BASE_URLS = {
 
 
 def require_key(provider: str) -> str:
-    """Legge la API key del provider dall'ambiente o solleva MissingKeyError."""
+    """Read the provider's API key from the environment or raise MissingKeyError."""
     env_name = PROVIDER_ENV_KEYS[provider]
     key = os.environ.get(env_name, "").strip()
     if not key:
@@ -54,7 +54,7 @@ def require_key(provider: str) -> str:
 
 
 def models_by_keys(keys: list[str] | None) -> list[ModelSpec]:
-    """Filtra i modelli per le chiavi richieste (None = tutti)."""
+    """Filter the models by the requested keys (None = all)."""
     if not keys:
         return list(ALL_MODELS)
     wanted = set(keys)
@@ -63,11 +63,11 @@ def models_by_keys(keys: list[str] | None) -> list[ModelSpec]:
 
 @lru_cache(maxsize=None)
 def get_balance(provider: str) -> dict | None:
-    """Saldo residuo del provider, se l'API lo espone, come
-    `{"available": bool, "amount": float, "currency": str}`; `None` se il provider
-    non ha un endpoint saldo (Anthropic e Mistral: consultabile solo dalla console
-    web) o se la chiamata fallisce. Cache per-processo: una sola richiesta di rete
-    per provider per esecuzione."""
+    """Remaining balance of the provider, if the API exposes it, as
+    `{"available": bool, "amount": float, "currency": str}`; `None` if the
+    provider has no balance endpoint (Anthropic and Mistral: only viewable from
+    the web console) or if the call fails. Per-process cache: a single network
+    request per provider per run."""
     if provider != "deepseek":
         return None  # solo DeepSeek espone GET /user/balance via API
     import json
@@ -93,29 +93,37 @@ def get_balance(provider: str) -> dict | None:
 
 @lru_cache(maxsize=1)
 def _anthropic_client():
+    """Lazily build and cache the Anthropic SDK client (one per process), so the
+    `anthropic` import and client setup happen only when Claude is actually used."""
     import anthropic
     return anthropic.Anthropic(api_key=require_key("anthropic"))
 
 
 @lru_cache(maxsize=None)
 def _openai_client(provider: str):
-    """Client OpenAI-compatibile per i provider non-Anthropic (DeepSeek, Mistral):
-    stesso SDK `openai`, cambiano solo base_url e chiave."""
+    """OpenAI-compatible client for the non-Anthropic providers (DeepSeek,
+    Mistral): same `openai` SDK, only base_url and key change. Cached per
+    provider so each client is built once."""
     from openai import OpenAI
     return OpenAI(api_key=require_key(provider),
                   base_url=OPENAI_COMPATIBLE_BASE_URLS[provider])
 
 
 def generate(spec: ModelSpec, prompt: str) -> tuple[str, dict]:
-    """Restituisce (codice_generato, usage) dove usage = conteggio token.
-    Smista sul provider giusto: Anthropic ha il suo SDK, gli altri usano l'API
-    OpenAI-compatibile."""
+    """Return (generated_code, usage) where usage = token counts.
+    Dispatches to the right provider: Anthropic has its own SDK, the others use
+    the OpenAI-compatible API. This is the single entry point the pipeline calls
+    to query any model."""
     if spec.provider == "anthropic":
         return _generate_anthropic(spec, prompt)
     return _generate_openai_compatible(spec, prompt)
 
 
 def _generate_anthropic(spec: ModelSpec, prompt: str) -> tuple[str, dict]:
+    """Generate with Claude via the Anthropic SDK and return (text, usage).
+    Behavior is controlled by `thinking` + `output_config.effort` (see config.py),
+    NOT by temperature, and the token counts (including cache fields) are
+    normalized into the shared `usage` dict used by the report."""
     # ⚠️ NIENTE temperature/top_p/top_k: Opus 4.7/4.8 li rifiuta con 400.
     # Il determinismo/economia si controlla con thinking + effort (vedi config.py).
     resp = _anthropic_client().messages.create(
@@ -138,9 +146,10 @@ def _generate_anthropic(spec: ModelSpec, prompt: str) -> tuple[str, dict]:
 
 
 def _generate_openai_compatible(spec: ModelSpec, prompt: str) -> tuple[str, dict]:
-    """Generazione via API OpenAI-compatibile (DeepSeek, Mistral). A differenza di
-    Claude, questi supportano `temperature` (impostata a 0.0 per determinismo) e il
-    system prompt è un normale messaggio di ruolo `system`."""
+    """Generate via the OpenAI-compatible API (DeepSeek, Mistral) and return
+    (text, usage). Unlike Claude, these support `temperature` (set to 0.0 for
+    determinism) and the system prompt is a normal `system` role message. For
+    DeepSeek we force non-thinking mode for fairness with Claude's regime."""
     extra = {}
     if spec.provider == "deepseek":
         # Equità col regime di Opus (CLAUDE_THINKING="disabled", effort "low"):

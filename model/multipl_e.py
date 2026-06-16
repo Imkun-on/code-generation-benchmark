@@ -1,38 +1,38 @@
 """
-multipl_e.py — Caricamento del benchmark MultiPL-E (nuprl/MultiPL-E).
+multipl_e.py — Loading the MultiPL-E benchmark (nuprl/MultiPL-E).
 
-MultiPL-E (Cassano et al., 2023) traduce HumanEval e MBPP in ~24 linguaggi di
-programmazione. Qui usiamo SOLO il set **HumanEval** (config `humaneval-<lang>`),
-con TUTTI i linguaggi disponibili, riuniti in UN UNICO benchmark (la colonna
-`language` distingue il linguaggio) → un solo file di risultato come per gli altri
-benchmark.
+MultiPL-E (Cassano et al., 2023) translates HumanEval and MBPP into ~24
+programming languages. Here we use ONLY the **HumanEval** set (config
+`humaneval-<lang>`), with ALL the available languages, gathered into ONE SINGLE
+benchmark (the `language` column distinguishes the language) → a single result
+file as for the other benchmarks.
 
-CARATTERISTICHE DI PROGETTO
+DESIGN CHARACTERISTICS
 ---------------------------
-  - È un benchmark di **SOLA esecuzione**: ogni esempio porta il `prompt` (firma +
-    documentazione nel linguaggio target, lasciata APERTA) e i `tests` nel
-    linguaggio target, ma **NON una soluzione gold**. Conseguenze:
-      * la metrica è il **pass@1** (codice generato + test eseguiti senza errori);
-      * **CodeBLEU NON è calcolabile** (manca un riferimento nel linguaggio
-        target) → nei record `metrics.codebleu` resta None.
-  - Il **pass@1 richiede il runtime** del linguaggio installato. Oggi eseguono
-    Python(n/a, non c'è in MultiPL-E), JS (Node), PHP, R, Java (JDK); C++ se c'è
-    g++; gli altri (go/rust/c#/swift/scala/haskell/…) danno `RuntimeMissing`
-    finché non si installa il toolchain (vedi executor.py).
+  - It is an **execution-only** benchmark: each example carries the `prompt`
+    (signature + documentation in the target language, left OPEN) and the `tests`
+    in the target language, but **NOT a gold solution**. Consequences:
+      * the metric is **pass@1** (generated code + tests run without errors);
+      * **CodeBLEU is NOT computable** (there is no reference in the target
+        language) → in the records `metrics.codebleu` stays None.
+  - **pass@1 requires the language runtime** installed. Today the runnable ones
+    are JS (Node), PHP, R, Java (JDK); C++ if g++ is present; the others
+    (go/rust/c#/swift/scala/haskell/…) yield `RuntimeMissing` until the toolchain
+    is installed (see executor.py).
 
-MODALITÀ COMPLETAMENTO
+COMPLETION MODE
 ----------------------
-Il `prompt` finisce con la firma APERTA della funzione (es. JS
-`function f(args){`); i `tests` sono costruiti per essere APPESI dopo il corpo
-(in Java iniziano addirittura con `}` che chiude il metodo). Quindi il programma
-da eseguire è `prompt + corpo_generato + tests` (assemblato in executor.py).
+The `prompt` ends with the OPEN function signature (e.g. JS `function f(args){`);
+the `tests` are built to be APPENDED after the body (in Java they even start with
+`}` that closes the method). So the program to execute is `prompt +
+generated_body + tests` (assembled in executor.py).
 
-DATI SU DISCO
+DATA ON DISK
 -------------
-Come gli altri benchmark, al primo run ogni config è salvata in
-Benchmark/multipl_e/<config>/ (save_to_disk, nomi corti per il limite MAX_PATH di
-Windows); i run successivi rileggono da disco. Il download HF su Windows richiede
-HF_HUB_DISABLE_SYMLINKS=1 (impostato qui, vedi memoria env-gotchas).
+Like the other benchmarks, on the first run each config is saved to
+Benchmark/multipl_e/<config>/ (save_to_disk, short names for Windows' MAX_PATH
+limit); subsequent runs read from disk. The HF download on Windows requires
+HF_HUB_DISABLE_SYMLINKS=1 (set here, see the env-gotchas memo).
 """
 
 import os
@@ -67,12 +67,17 @@ _NAME_RE = re.compile(r"^(?:HumanEval|MBPP)_\d+_(.+)$")
 
 
 def function_name(name: str) -> str | None:
+    """Extract the function name from the `name` field (e.g.
+    "HumanEval_0_has_close_elements" -> "has_close_elements"), used as a
+    directional stimulus ("use exactly this name"). Best-effort: returns None if
+    it does not match."""
     m = _NAME_RE.match(name or "")
     return m.group(1) if m else None
 
 
 def _load_config(lang: str, limit: int | None):
-    """Carica (e mette in cache su disco) una singola config `humaneval-<lang>`."""
+    """Load (and cache on disk) a single `humaneval-<lang>` config. Returns
+    (dataset, n) where n is the number of examples to use after applying `limit`."""
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     from datasets import load_from_disk
@@ -94,25 +99,25 @@ def _load_config(lang: str, limit: int | None):
 def load_multipl_e(limit: int | None = None,
                    languages: list[str] | None = None) -> list[dict]:
     """
-    Carica MultiPL-E (set HumanEval) come UN SOLO elenco di problemi (tutti i
-    linguaggi insieme).
+    Load MultiPL-E (HumanEval set) as ONE SINGLE list of problems (all the
+    languages together).
 
-    Primo run: scarica `nuprl/MultiPL-E` (config `humaneval-<lang>`) da Hugging
-    Face e la salva in Benchmark/multipl_e/<config>. Run successivi: rilegge da
-    disco.
+    First run: downloads `nuprl/MultiPL-E` (config `humaneval-<lang>`) from
+    Hugging Face and saves it to Benchmark/multipl_e/<config>. Subsequent runs:
+    reads from disk.
 
-    limit: se valorizzato, prende i primi N esempi **per ciascun linguaggio** (così
-           un giro di prova economico esercita comunque tutti i linguaggi).
-    languages: sottoinsieme dei linguaggi da caricare (default: tutti).
+    limit: if set, takes the first N examples **per language** (so a cheap trial
+           run still exercises every language).
+    languages: subset of languages to load (default: all).
 
-    Ogni record:
-      task_id     = "<lang>/<name>" (unico tra linguaggi → no collisioni nel
-                    checkpoint, es. "js/HumanEval_0_has_close_elements")
-      name        identificatore del problema (uguale tra i linguaggi)
-      language    linguaggio target (js/php/r/java/cpp/…)
-      prompt      firma + doc nel linguaggio target, lasciata APERTA (da completare)
-      tests       harness di test nel linguaggio target (da appendere dopo il corpo)
-      stop_tokens token che segnalano la fine della generazione (informativo)
+    Each record:
+      task_id     = "<lang>/<name>" (unique across languages → no checkpoint
+                    collisions, e.g. "js/HumanEval_0_has_close_elements")
+      name        problem identifier (same across languages)
+      language    target language (js/php/r/java/cpp/…)
+      prompt      signature + doc in the target language, left OPEN (to complete)
+      tests       test harness in the target language (to append after the body)
+      stop_tokens tokens that signal the end of generation (informative)
     """
     BENCHMARK_DIR.mkdir(exist_ok=True)
     langs = languages or LANGUAGES
@@ -138,16 +143,16 @@ def load_multipl_e(limit: int | None = None,
 
 def plan_run(limit: int | None = None,
              languages: list[str] | None = None) -> tuple[list[dict], dict]:
-    """Pianifica un run MultiPL-E generando SOLO per i linguaggi ESEGUIBILI.
+    """Plan a MultiPL-E run, generating ONLY for the RUNNABLE languages.
 
-    Come DS-1000 con le librerie installate: rileva quali linguaggi hanno il runtime
-    (via executor.multipl_e_runnable) e carica/genererà SOLO quelli, **saltando**
-    gli altri — così non si spende API per problemi che darebbero comunque
-    `RuntimeMissing`. Nessun taglio silenzioso: i saltati sono riportati in `info`.
+    Like DS-1000 with installed libraries: detects which languages have a runtime
+    (via executor.multipl_e_runnable) and loads/generates ONLY those, **skipping**
+    the others — so no API is spent on problems that would yield `RuntimeMissing`
+    anyway. No silent truncation: the skipped ones are reported in `info`.
 
-    languages: sottoinsieme richiesto (default: tutti i 24). Tra questi, vengono
-               eseguiti solo quelli eseguibili.
-    Ritorna (problems, info) con info = {available, missing, requested}.
+    languages: requested subset (default: all 24). Among these, only the runnable
+               ones are executed.
+    Returns (problems, info) with info = {available, missing, requested}.
     """
     from .executor import multipl_e_runnable
 

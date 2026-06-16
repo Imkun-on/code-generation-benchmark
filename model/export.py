@@ -1,11 +1,12 @@
 """
-export.py — Esportazione del DETTAGLIO per-problema in CSV e XLSX.
+export.py — Export of the per-problem DETAIL to CSV and XLSX.
 
-Affianca al file JSON due formati più comodi da analizzare. Il riepilogo
-aggregato NON viene esportato su file (si vede solo a schermo, vedi report.py).
+Adds, alongside the JSON file, two formats that are more convenient to analyze.
+The aggregated summary is NOT exported to file (it is shown on screen only, see
+report.py).
 
-Il CSV è salvato in UTF-8 con BOM (utf-8-sig) così Excel mostra correttamente
-gli accenti. La colonna 'code' contiene il codice generato (può andare a capo).
+The CSV is saved in UTF-8 with BOM (utf-8-sig) so Excel displays accents
+correctly. The 'code' column contains the generated code (may span lines).
 """
 
 import csv
@@ -13,11 +14,12 @@ from pathlib import Path
 
 
 def _xlsx_safe(value):
-    """Tiene solo i caratteri validi in XML 1.0 (l'.xlsx è XML): scarta i control
-    C0 (NULL & co.), i surrogati e i "non-caratteri" come U+FFFF. Questi possono
-    comparire nel codice generato dal modello o nello stderr e farebbero crashare
-    openpyxl/lxml (`ValueError: All strings must be XML compatible`). Applicato alle
-    celle stringa prima di scrivere l'Excel; gli altri valori passano invariati."""
+    """Keep only the characters valid in XML 1.0 (the .xlsx is XML): drop the C0
+    control chars (NULL & co.), the surrogates and the "non-characters" like
+    U+FFFF. These can appear in the model's generated code or in stderr and would
+    crash openpyxl/lxml (`ValueError: All strings must be XML compatible`).
+    Applied to string cells before writing the Excel; other values pass through
+    unchanged."""
     if not isinstance(value, str):
         return value
     return "".join(
@@ -81,29 +83,30 @@ MULTIPLE_DETAIL_HEADERS = [
 
 
 def _is_multipl_e_record(rec: dict) -> bool:
-    """I record MultiPL-E hanno benchmark='multipl-e' (o i campi language+tests,
-    unici a questo benchmark)."""
+    """MultiPL-E records have benchmark='multipl-e' (or the language+tests fields,
+    unique to this benchmark)."""
     return (rec.get("benchmark") == "multipl-e"
             or ("language" in rec and "tests" in rec))
 
 
 def _is_mbpp_record(rec: dict) -> bool:
-    """I record MBPP hanno `test_list`; quelli HumanEval hanno `test`/`prompt`."""
+    """MBPP records have `test_list`; HumanEval ones have `test`/`prompt`."""
     return rec.get("benchmark") == "mbpp" or "test_list" in rec
 
 
 def _is_ds1000_record(rec: dict) -> bool:
-    """I record DS-1000 hanno benchmark='ds1000' (o il campo `library`)."""
+    """DS-1000 records have benchmark='ds1000' (or the `library` field)."""
     return rec.get("benchmark") == "ds1000" or "library" in rec
 
 
 def _is_plot2code_record(rec: dict) -> bool:
-    """I record Plot2Code hanno benchmark='plot2code' (o il campo `instruction`)."""
+    """Plot2Code records have benchmark='plot2code' (or the `instruction` field)."""
     return rec.get("benchmark") == "plot2code" or "instruction" in rec
 
 
 def _detail_headers(records: list[dict]) -> list[str]:
-    """Intestazioni adatte al benchmark dei record (dedotto dal primo record)."""
+    """Headers appropriate for the records' benchmark (inferred from the first
+    record), since each benchmark exports a different set of columns."""
     if records and _is_multipl_e_record(records[0]):
         return MULTIPLE_DETAIL_HEADERS
     if records and _is_plot2code_record(records[0]):
@@ -116,12 +119,17 @@ def _detail_headers(records: list[dict]) -> list[str]:
 
 
 def _pass_cell(rec: dict):
+    """Render the single pass@1 outcome cell: "passed" if solved, otherwise the
+    error category (SyntaxError, AssertionError, TimeoutError, …)."""
     # pass@1: "passed" se risolto, altrimenti la categoria di errore
     # (SyntaxError, AssertionError, TimeoutError, …).
     return "passed" if rec.get("passed") else (rec.get("category") or "")
 
 
 def _detail_row(rec: dict) -> list:
+    """Build the detail row for one record, in the column order of its benchmark
+    (MultiPL-E / Plot2Code / DS-1000 / MBPP / HumanEval). Returns the cell values
+    aligned with the headers from _detail_headers."""
     cb = (rec.get("metrics") or {}).get("codebleu")
     cb_cell = round(cb, 4) if cb is not None else ""
 
@@ -204,6 +212,9 @@ def _detail_row(rec: dict) -> list:
 
 
 def records_to_csv(records: list[dict], path: Path) -> None:
+    """Write the per-problem detail of `records` to a CSV at `path` (UTF-8 with
+    BOM so Excel reads accents correctly), with the benchmark-appropriate
+    headers."""
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(_detail_headers(records))
@@ -212,8 +223,10 @@ def records_to_csv(records: list[dict], path: Path) -> None:
 
 
 def to_xlsx(records: list[dict], path: Path) -> None:
-    """Scrive un workbook Excel con il solo foglio 'Dettaglio' (per-problema).
-    Richiede openpyxl (solleva ImportError se assente: il chiamante lo gestisce)."""
+    """Write an Excel workbook with the single 'Dettaglio' sheet (per-problem).
+    Requires openpyxl (raises ImportError if absent: the caller handles it).
+    String cells are sanitized with _xlsx_safe so invalid XML chars don't crash
+    the writer."""
     from openpyxl import Workbook
     from openpyxl.styles import Font
 

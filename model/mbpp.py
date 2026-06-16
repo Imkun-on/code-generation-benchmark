@@ -1,20 +1,20 @@
 """
-mbpp.py — Caricamento del benchmark MBPP (Mostly Basic Python Problems).
+mbpp.py — Loading the MBPP benchmark (Mostly Basic Python Problems).
 
-Usiamo la configurazione "full" e teniamo SOLO lo split di TEST ufficiale:
-i 500 problemi con task_id 11–510 (Austin et al., 2021). Il perché della scelta
-di "full" (e non "sanitized") è spiegato nel README.
+We use the "full" configuration and keep ONLY the official TEST split: the 500
+problems with task_id 11–510 (Austin et al., 2021). The rationale for choosing
+"full" (and not "sanitized") is explained in the README.
 
-Struttura di un problema MBPP (config "full"):
+Structure of an MBPP problem (config "full"):
   task_id, text, code, test_list, test_setup_code, challenge_test_list
 
-Nota: a differenza di HumanEval, in MBPP la colonna `code` è GIÀ la funzione
-completa (def + corpo), non solo il corpo. Quindi non serve ricostruire un
-"codice_completo": `code` è già il riferimento completo per il CodeBLEU.
+Note: unlike HumanEval, in MBPP the `code` column is ALREADY the complete
+function (def + body), not just the body. So there is no need to rebuild a
+"codice_completo": `code` is already the complete reference for CodeBLEU.
 
-Come per HumanEval, il dataset viene salvato in locale con save_to_disk in
-Benchmark/mbpp/ e riletto da lì ai run successivi (nomi corti per il limite
-di 260 caratteri di Windows; vedi humaneval.py per il dettaglio).
+As with HumanEval, the dataset is saved locally with save_to_disk in
+Benchmark/mbpp/ and read back from there on subsequent runs (short names for
+Windows' 260-character limit; see humaneval.py for details).
 """
 
 from pathlib import Path
@@ -33,13 +33,13 @@ TEST_TASK_ID_MAX = 510
 
 def load_mbpp(limit: int | None = None) -> list[dict]:
     """
-    Carica i 500 problemi di test di MBPP (task_id 11–510).
+    Load the 500 MBPP test problems (task_id 11–510).
 
-    Primo run: scarica la config "full" da Hugging Face, seleziona il test
-    ufficiale per task_id e salva in Benchmark/mbpp/.
-    Run successivi: rilegge direttamente da quella cartella (nessun download).
+    First run: downloads the "full" config from Hugging Face, selects the
+    official test set by task_id and saves it to Benchmark/mbpp/.
+    Subsequent runs: reads directly from that folder (no download).
 
-    limit: se valorizzato, prende solo i primi N problemi (test rapidi/economici).
+    limit: if set, takes only the first N problems (quick/cheap tests).
     """
     BENCHMARK_DIR.mkdir(exist_ok=True)
 

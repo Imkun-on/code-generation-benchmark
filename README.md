@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧪 Claude Code Generation Benchmark (HumanEval · MBPP · DS-1000 · Plot2Code · MultiPL-E)
+# 🧪 Code Generation Benchmark: LLM vs MoE vs SLM (HumanEval · MBPP · DS-1000 · Plot2Code · MultiPL-E)
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python">
@@ -176,13 +176,6 @@ meno blocchi e dimensioni interne ridotte.
 </tr>
 </table>
 
-> Immagini da Wikimedia Commons:
-> [Full GPT architecture](https://commons.wikimedia.org/wiki/File:Full_GPT_architecture.svg),
-> [DeepSeek MoE and MLA (DeepSeek-V2)](https://commons.wikimedia.org/wiki/File:DeepSeek_MoE_and_MLA_(DeepSeek-V2).svg),
-> [GPT decoder-only stack](https://commons.wikimedia.org/wiki/File:Gpt-main.png). Lo schema MoE
-> si riferisce alla serie DeepSeek-V2/V3, la cui struttura a esperti è la stessa adottata dalla
-> serie V4 qui testata.
-
 ### Confronto sintetico
 
 | Caratteristica | LLM denso | MoE | SLM |
@@ -204,11 +197,6 @@ non un campionato tra brand):
 | `claude-opus-4.7` | **LLM** (dense, frontier) | anthropic | `claude-opus-4-7` | 5.00 / 25.00 |
 | `deepseek-v4-pro` | **MoE** (284B tot / 13B attivi) | deepseek | `deepseek-v4-pro` | 0.14 / 0.28 |
 | `ministral-8b` | **SLM** (8B, edge/efficiente) | mistral | `ministral-8b-latest` | 0.10 / 0.10 |
-
-> Vengono eseguiti **solo i modelli per cui è impostata la API key**: gli altri sono saltati con
-> un avviso (puoi quindi lanciare anche solo Claude). I `model_id` e i prezzi vanno verificati sulle
-> console dei provider (cambiano spesso). Per scegliere un sottoinsieme (ripeti l'opzione):
-> `--models claude-opus-4.7 --models deepseek-v4-pro`.
 
 ---
 
@@ -275,8 +263,10 @@ pip install -r requirements.txt
 
 ### Configurazione della API Key
 
-Il benchmark interroga Claude tramite le API di Anthropic. Imposta la tua API key prima di avviare,
-oppure mettila in un file `.env` nella root del progetto:
+Il benchmark interroga ciascun modello tramite l'API del rispettivo provider: **Anthropic** per
+Claude, **DeepSeek** per DeepSeek V4 Pro e **Mistral** per Ministral 8B. Imposta le API key dei
+provider che vuoi testare prima di avviare, oppure mettile in un file `.env` nella root del
+progetto:
 
 ```bash
 ANTHROPIC_API_KEY=la-tua-api-key
@@ -284,24 +274,35 @@ DEEPSEEK_API_KEY=la-tua-api-key
 MISTRAL_API_KEY=la-tua-api-key
 ```
 
-> Basta la chiave di **almeno un** provider: i modelli senza chiave vengono saltati con un avviso.
-> Con tutte e tre le chiavi ottieni il confronto completo LLM vs MoE vs SLM.
+> Vengono eseguiti **solo i modelli per cui è impostata la API key**: gli altri sono saltati con
+> un avviso. Basta quindi la chiave di **almeno un** provider (puoi lanciare anche solo uno dei
+> tre modelli); con tutte e tre le chiavi ottieni il confronto completo LLM vs MoE vs SLM. I
+> `model_id` e i prezzi vanno verificati sulle console dei provider (cambiano spesso); per
+> scegliere un sottoinsieme ripeti l'opzione `--models` (es. `--models claude-opus-4.7 --models
+> deepseek-v4-pro`).
 
-Oppure come variabile d'ambiente:
+Oppure come variabili d'ambiente:
 
 Su Windows (PowerShell):
 
 ```powershell
 $env:ANTHROPIC_API_KEY="la-tua-api-key"
+$env:DEEPSEEK_API_KEY="la-tua-api-key"
+$env:MISTRAL_API_KEY="la-tua-api-key"
 ```
 
 Su Linux/macOS:
 
 ```bash
 export ANTHROPIC_API_KEY="la-tua-api-key"
+export DEEPSEEK_API_KEY="la-tua-api-key"
+export MISTRAL_API_KEY="la-tua-api-key"
 ```
 
-> Puoi ottenere una API key da [console.anthropic.com](https://console.anthropic.com).
+> Puoi ottenere una API key dalle console dei provider:
+> [console.anthropic.com](https://console.anthropic.com) (Claude),
+> [platform.deepseek.com](https://platform.deepseek.com) (DeepSeek) e
+> [console.mistral.ai](https://console.mistral.ai) (Mistral).
 
 ---
 
@@ -419,24 +420,6 @@ Model_Test_Benchmark/
     ├── report.py           # aggregazione (pass@1, errori, token/costo) e tabelle rich
     └── export.py           # export del dettaglio in CSV e XLSX
 ```
-
-> ### 📝 Nota: perché il package si chiama `model/` (e non `claude/`)
->
-> All'inizio avevo chiamato questa cartella `claude/`, perché il progetto era nato per testare
-> **Claude Opus**. Col tempo però il package è diventato **generico**: orchestra lo stesso
-> benchmark su modelli di architetture diverse (Claude come LLM, DeepSeek come MoE, Ministral
-> come SLM) e in futuro voglio poterci agganciare **altri modelli** senza che il nome della
-> cartella sia fuorviante. Per questo l'ho **rinominata da `claude/` a `model/`**: descrive il
-> *ruolo* (il "motore" che genera il codice) e non un fornitore specifico.
->
-> **Cosa ho dovuto cambiare:** gli import *interni* al package erano già relativi
-> (`from .config`, `from . import executor`), quindi si sono spostati con la cartella senza
-> modifiche. Ho aggiornato solo i riferimenti *assoluti* al package — gli import in `cli.py`
-> (`from claude.… → from model.…`) e i comandi/percorsi citati nei commenti e in questo README
-> (`python -m claude.claude → python -m model.claude`, `claude/config.py → model/config.py`,
-> ecc.). I **nomi dei modelli** (es. `claude-opus-4.7`) e le costanti `CLAUDE_EFFORT` /
-> `CLAUDE_THINKING` sono rimasti invariati: si riferiscono al *modello* di Anthropic, non alla
-> cartella.
 
 ---
 

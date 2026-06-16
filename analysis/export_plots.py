@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""Estrae i grafici dal notebook eseguito `results_analysis.ipynb` e li salva in `../plots/`
-come PNG con nomi parlanti, cosi' possono essere riusati nel README."""
+"""Extracts the charts from the executed notebook `results_analysis.ipynb` and saves
+them to `../plots/` as PNGs with descriptive names, so they can be reused in the README."""
 import base64
 import re
 from pathlib import Path
@@ -13,7 +13,9 @@ PLOTS.mkdir(exist_ok=True)
 
 
 def name_for(src: str):
-    """Nome file in base al contenuto della cella che ha prodotto il grafico."""
+    """File name based on the content of the cell that produced the chart (so each
+    exported PNG gets a stable, descriptive name). Returns None for cells that do
+    not produce a tracked chart."""
     if "p_pass" in src:
         return "01_pass1_per_benchmark_e_modello"
     if "scatter_for_model(" in src:
@@ -29,6 +31,9 @@ def name_for(src: str):
 
 
 def main():
+    """Read the executed notebook, find the cells that produced a tracked chart,
+    decode their PNG output and write each to ../plots/<name>.png; print a summary
+    of the saved files."""
     nb = nbformat.read(NB, as_version=4)
     saved = []
     for cell in nb.cells:

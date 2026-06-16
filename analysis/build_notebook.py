@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Genera il notebook Jupyter `results_analysis.ipynb` per l'analisi dei 5 benchmark."""
+"""Generates the Jupyter notebook `results_analysis.ipynb` for the analysis of the 5
+benchmarks. (The notebook content itself — markdown and code cells — is kept in Italian,
+as it is the analysis report, the counterpart of the Italian README.)"""
 import nbformat as nbf
 from nbformat.v4 import new_notebook, new_markdown_cell, new_code_cell
 from pathlib import Path
@@ -9,10 +11,12 @@ cells = []
 
 
 def md(src):
+    """Append a markdown cell with the given source to the notebook being built."""
     cells.append(new_markdown_cell(src))
 
 
 def code(src):
+    """Append a code cell with the given source to the notebook being built."""
     cells.append(new_code_cell(src))
 
 

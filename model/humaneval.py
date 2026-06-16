@@ -1,24 +1,24 @@
 """
-humaneval.py — Caricamento del benchmark HumanEval da Hugging Face.
+humaneval.py — Loading the HumanEval benchmark from Hugging Face.
 
-Ogni problema è un dict con le colonne descritte nel README:
+Each problem is a dict with the columns described in the README:
   task_id, prompt, canonical_solution, test, entry_point
 
-A queste aggiungiamo una colonna derivata "codice_completo" = prompt +
-canonical_solution: in HumanEval la `prompt` contiene import + firma + docstring
-e la `canonical_solution` contiene SOLO il corpo (indentato). Concatenandole si
-ottiene la funzione di riferimento COMPLETA ed eseguibile, che usiamo come
-riferimento per il CodeBLEU. Dalla funzione così ottenuta RIMUOVIAMO la
-docstring (strip_docstrings): il modello genera la funzione completa ma di
-norma senza docstring, e tenerla solo nel riferimento penalizzerebbe il
-CodeBLEU a parità di logica.
+To these we add a derived column "codice_completo" = prompt +
+canonical_solution: in HumanEval the `prompt` contains imports + signature +
+docstring and the `canonical_solution` contains ONLY the body (indented).
+Concatenating them yields the COMPLETE, executable reference function, which we
+use as the reference for CodeBLEU. From the resulting function we REMOVE the
+docstring (strip_docstrings): the model generates the complete function but
+usually without a docstring, and keeping it only in the reference would
+penalize CodeBLEU for equivalent logic.
 
-I dataset, una volta scaricati, vengono salvati nella cartella locale del
-progetto "Benchmark/" (con save_to_disk) e da lì riletti ai run successivi.
+Once downloaded, the datasets are saved to the project's local "Benchmark/"
+folder (with save_to_disk) and read back from there on subsequent runs.
 
-Nota Windows: non usiamo cache_dir=Benchmark perché HuggingFace crea un file
-di lock il cui nome incorpora l'intero path assoluto; su percorsi profondi
-supera il limite di 260 caratteri di Windows. save_to_disk usa nomi corti.
+Windows note: we do not use cache_dir=Benchmark because Hugging Face creates a
+lock file whose name embeds the entire absolute path; on deep paths it exceeds
+Windows' 260-character limit. save_to_disk uses short names.
 """
 
 from pathlib import Path
@@ -34,13 +34,13 @@ HUMANEVAL_DIR = BENCHMARK_DIR / "humaneval"
 
 def load_humaneval(limit: int | None = None) -> list[dict]:
     """
-    Carica HumanEval (164 problemi).
+    Load HumanEval (164 problems).
 
-    Primo run: scarica da Hugging Face e salva in Benchmark/humaneval/.
-    Run successivi: rilegge direttamente da quella cartella (nessun download).
+    First run: downloads from Hugging Face and saves to Benchmark/humaneval/.
+    Subsequent runs: reads directly from that folder (no download).
 
-    limit: se valorizzato, prende solo i primi N problemi
-           (utile per test rapidi senza spendere molte API call).
+    limit: if set, takes only the first N problems
+           (useful for quick tests without spending many API calls).
     """
     BENCHMARK_DIR.mkdir(exist_ok=True)
 

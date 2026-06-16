@@ -1,8 +1,8 @@
 """
-config.py — Definizioni condivise: architetture, struttura di un modello,
-costanti di generazione ed endpoint dei provider.
+config.py — Shared definitions: architectures, the structure of a model,
+generation constants and the providers' endpoints.
 
-L'ELENCO dei modelli sta in model/claude.py (l'unico provider rimasto).
+The LIST of models lives in model/claude.py (the only remaining provider).
 """
 
 from dataclasses import dataclass
@@ -22,7 +22,14 @@ ARCHITECTURES = {
 
 @dataclass(frozen=True)
 class ModelSpec:
-    """Descrizione di un modello da testare."""
+    """Description of a model to be tested.
+
+    Frozen dataclass that holds everything the pipeline needs to identify a
+    model and route it to the right provider: the short `key` used in output
+    files, the exact `model_id` required by the provider's API, the `provider`
+    (which selects the API client and credentials) and the `architecture`
+    (LLM/MoE/SLM/VLM) used to group results in the report. `note` is a free-text
+    description (size, parameters…)."""
     key: str            # nome breve usato nei file di output
     model_id: str       # id esatto richiesto dall'API del provider
     provider: str       # anthropic | openai | google | deepseek | mistral
@@ -74,4 +81,7 @@ PRICING = {
 
 
 class MissingKeyError(RuntimeError):
-    """La API key del provider non è impostata nell'ambiente."""
+    """Raised when the provider's API key is not set in the environment.
+
+    Used to fail fast (with a clear message) when a model is requested but its
+    credentials are missing, instead of letting an opaque API error surface."""

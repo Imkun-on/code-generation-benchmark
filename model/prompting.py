@@ -1,18 +1,18 @@
 """
-prompting.py — Directional Stimulus Prompting (DSP) per la generazione di codice.
+prompting.py — Directional Stimulus Prompting (DSP) for code generation.
 
-DSP (Li et al., 2023) NON è un semplice role-prompt fisso: l'idea è aggiungere,
-per OGNI input, dei piccoli "stimoli direzionali" (hint) che puntano il modello
-verso la soluzione giusta di QUEL problema specifico.
+DSP (Li et al., 2023) is NOT a simple fixed role-prompt: the idea is to add, for
+EVERY input, small "directional stimuli" (hints) that point the model toward the
+right solution of THAT specific problem.
 
-Qui gli stimoli si estraggono LOCALMENTE dal problema HumanEval (firma, tipo di
-ritorno, nome funzione, esempi doctest, parole-chiave di edge case): nessuna
-chiamata API aggiuntiva, quindi nessuno spreco di risorse.
+Here the stimuli are extracted LOCALLY from the problem (signature, return type,
+function name, doctest examples, edge-case keywords): no extra API call, hence no
+waste of resources.
 
-  build_prompt(problem) -> str   il messaggio user = enunciato + stimolo direzionale
+  build_prompt(problem) -> str   the user message = statement + directional stimulus
 
-Il vincolo "rispondi SOLO con codice" vive nel SYSTEM_PROMPT (config.py); qui ci
-occupiamo solo di COSA dire al modello, non del formato di output.
+The constraint "respond with code ONLY" lives in the SYSTEM_PROMPT (config.py);
+here we only deal with WHAT to tell the model, not the output format.
 """
 
 import re
@@ -75,7 +75,8 @@ _MBPP_CALL_RE = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
 
 
 def _signature_line(prompt: str) -> str | None:
-    """Estrae la riga 'def ...:' (firma completa, anche su più righe)."""
+    """Extract the 'def ...:' line (the full signature, even across multiple
+    lines). Returns None if no function signature is found."""
     m = _DEF_RE.search(prompt)
     if not m:
         return None
@@ -84,18 +85,22 @@ def _signature_line(prompt: str) -> str | None:
 
 
 def _return_type(prompt: str) -> str | None:
+    """Extract the declared return type from the signature's `-> type:`
+    annotation, or None if there is no annotation."""
     m = _RETURN_RE.search(prompt)
     return m.group(1).strip() if m else None
 
 
 def _doctest_examples(prompt: str, max_examples: int = 3) -> list[str]:
-    """Righe doctest (>>> ...) presenti nel docstring: input/output attesi."""
+    """Doctest lines (>>> ...) present in the docstring: expected input/output.
+    Capped at `max_examples` to keep the prompt short."""
     examples = [line.strip() for line in _DOCTEST_RE.findall(prompt)]
     return examples[:max_examples]
 
 
 def _edge_cases(prompt: str) -> list[str]:
-    """Parole-chiave di edge case citate nel docstring, deduplicate e in ordine."""
+    """Edge-case keywords mentioned in the docstring, deduplicated and in order.
+    Surfacing them as a stimulus reminds the model not to forget those cases."""
     low = prompt.lower()
     found: list[str] = []
     for kw in _EDGE_CASE_KEYWORDS:
@@ -106,9 +111,10 @@ def _edge_cases(prompt: str) -> list[str]:
 
 def directional_stimulus(problem: dict) -> str:
     """
-    Costruisce lo *stimolo direzionale* (gli hint) per un problema HumanEval.
+    Build the *directional stimulus* (the hints) for a HumanEval problem.
 
-    Restituisce un blocco di testo con i puntatori chiave verso la soluzione.
+    Returns a text block with the key pointers toward the solution: function to
+    implement, signature, return type, doctest examples and edge cases.
     """
     prompt = problem.get("prompt", "")
     entry = problem.get("entry_point") or ""
@@ -148,10 +154,10 @@ _MBPP_WRAPPERS = {
 
 
 def _mbpp_function_name(problem: dict) -> str | None:
-    """Deduce il nome della funzione da testare dal primo assert utile.
+    """Infer the function name to test from the first useful assert.
 
-    Scorre gli identificatori chiamati (`nome(`) nell'assert e ritorna il primo
-    che non sia un wrapper noto (set/sorted/math.isclose/…)."""
+    Scans the called identifiers (`name(`) in the assert and returns the first
+    one that is not a known wrapper (set/sorted/math.isclose/…)."""
     for test in problem.get("test_list", []):
         for name in _MBPP_CALL_RE.findall(test):
             if name not in _MBPP_WRAPPERS:
@@ -160,11 +166,11 @@ def _mbpp_function_name(problem: dict) -> str | None:
 
 
 def directional_stimulus_mbpp(problem: dict) -> str:
-    """Stimolo direzionale per un problema MBPP.
+    """Directional stimulus for an MBPP problem.
 
-    Gli hint puntano il modello su: nome della funzione (dedotto dai test) e i
-    test che deve superare (in MBPP i test SONO la specifica). Aggiungiamo, se
-    presenti nel testo, le parole-chiave di edge case."""
+    The hints point the model to: the function name (inferred from the tests) and
+    the tests it must pass (in MBPP the tests ARE the specification). We also add,
+    if present in the text, the edge-case keywords."""
     hints: list[str] = []
 
     fn = _mbpp_function_name(problem)
@@ -184,8 +190,8 @@ def directional_stimulus_mbpp(problem: dict) -> str:
 
 
 def _build_prompt_mbpp(problem: dict) -> str:
-    """Messaggio user per MBPP = descrizione naturale + stimolo direzionale
-    (nome funzione dedotto + test da superare)."""
+    """User message for MBPP = natural-language description + directional
+    stimulus (inferred function name + tests to pass)."""
     base = problem.get("text", "").rstrip()
     stimulus = directional_stimulus_mbpp(problem)
 
@@ -215,16 +221,16 @@ DSP_INSTRUCTION_DS1000 = (
 
 
 def _ds1000_solution_form(problem: dict) -> str:
-    """Deduce DOVE va inserita la soluzione guardando la riga che precede
-    `[insert]` nell'harness (`code_context`):
+    """Infer WHERE the solution goes by looking at the line preceding `[insert]`
+    in the harness (`code_context`):
 
-      - 'function-body' se il blank è dentro un blocco aperto da `def ...:`
-        (formato 'Insertion' di DS-1000): la soluzione è il CORPO della funzione,
-        va indentata e termina con `return`.
-      - 'module' altrimenti (formato 'Completion'): la soluzione sta a livello di
-        modulo e deve definire la variabile `result`.
+      - 'function-body' if the blank is inside a block opened by `def ...:`
+        (DS-1000 'Insertion' format): the solution is the function BODY, must be
+        indented and ends with `return`.
+      - 'module' otherwise ('Completion' format): the solution is at module level
+        and must define the `result` variable.
 
-    È uno stimolo DSP estratto LOCALMENTE dal problema (nessuna chiamata extra)."""
+    It is a DSP stimulus extracted LOCALLY from the problem (no extra call)."""
     cc = problem.get("code_context", "")
     i = cc.find("[insert]")
     if i == -1:
@@ -237,24 +243,24 @@ def _ds1000_solution_form(problem: dict) -> str:
 
 
 def directional_stimulus_ds1000(problem: dict) -> str:
-    """Stimolo direzionale per DS-1000: libreria target + formato della soluzione.
+    """Directional stimulus for DS-1000: target library + solution format.
 
-    Il formato (corpo di funzione vs assegnazione a `result` a livello di modulo)
-    è dedotto dallo scaffold e allinea l'output a ciò che l'harness si aspetta —
-    necessario per il pass@1:
-      - 'Insertion': il blank è dentro un `def`; il modello scrive il corpo a
-        colonna 0 (l'indentazione la mette l'executor, vedi executor.py), evitando
-        il tipico rientro incoerente che causa IndentationError.
-      - 'Completion': il blank è a livello di modulo; il modello assegna `result`
-        con la sua forma naturale (snippet), usando i dati già forniti SENZA
-        reimportarli/ridefinirli (così non sovrascrive l'input del test).
+    The format (function body vs assignment to `result` at module level) is
+    inferred from the scaffold and aligns the output with what the harness
+    expects — necessary for pass@1:
+      - 'Insertion': the blank is inside a `def`; the model writes the body at
+        column 0 (the executor handles the indentation, see executor.py), avoiding
+        the typical inconsistent indent that causes IndentationError.
+      - 'Completion': the blank is at module level; the model assigns `result` in
+        its natural form (snippet), using the data already provided WITHOUT
+        re-importing/redefining it (so it does not overwrite the test's input).
 
-    Nota di progetto: NON forziamo il modello a riprodurre la forma "function-
-    wrapper" della gold per alzare il CodeBLEU — sarebbe modellare l'output su una
-    metrica anziché misurarlo, aggiunge rischio al pass@1 (il modello tende a
-    ricreare anche il setup dati e a sovrascrivere il test) e il CodeBLEU resta
-    comunque debole su DS-1000 (soluzioni equivalenti scritte diversamente). Il
-    CodeBLEU è metrica SECONDARIA qui; la primaria è il pass@1."""
+    Design note: we do NOT force the model to reproduce the gold's "function-
+    wrapper" form to raise CodeBLEU — that would mean shaping the output to a
+    metric rather than measuring it, adds risk to pass@1 (the model tends to also
+    recreate the data setup and overwrite the test) and CodeBLEU stays weak on
+    DS-1000 anyway (equivalent solutions written differently). CodeBLEU is a
+    SECONDARY metric here; the primary one is pass@1."""
     hints: list[str] = []
     lib = (problem.get("metadata") or {}).get("library", "")
     if lib:
@@ -279,8 +285,8 @@ def directional_stimulus_ds1000(problem: dict) -> str:
 
 
 def _build_prompt_ds1000(problem: dict) -> str:
-    """Messaggio user per DS-1000 = istruzione + il prompt originale (già completo)
-    + stimolo direzionale (libreria target + formato della soluzione)."""
+    """User message for DS-1000 = instruction + the original prompt (already
+    complete) + directional stimulus (target library + solution format)."""
     base = problem.get("prompt", "").rstrip()
     stimulus = directional_stimulus_ds1000(problem)
 
@@ -310,7 +316,7 @@ DSP_INSTRUCTION_PLOT2CODE = (
 
 
 def _build_prompt_plot2code(problem: dict) -> str:
-    """Messaggio user per Plot2Code = istruzione + descrizione della figura."""
+    """User message for Plot2Code = instruction + the figure description."""
     desc = (problem.get("instruction") or "").rstrip()
     return "\n\n".join([DSP_INSTRUCTION_PLOT2CODE, "# Descrizione della figura\n" + desc])
 
@@ -337,8 +343,8 @@ DSP_INSTRUCTION_MULTIPLE = (
 
 
 def directional_stimulus_multipl_e(problem: dict) -> str:
-    """Stimolo direzionale per MultiPL-E: nome funzione (da rispettare) + esempi
-    estratti dai commenti `>>> ...` del prompt."""
+    """Directional stimulus for MultiPL-E: function name (to be respected) +
+    examples extracted from the `>>> ...` comments of the prompt."""
     hints: list[str] = []
 
     from .multipl_e import function_name
@@ -357,8 +363,8 @@ def directional_stimulus_multipl_e(problem: dict) -> str:
 
 
 def _build_prompt_multipl_e(problem: dict) -> str:
-    """Messaggio user per MultiPL-E = istruzione (modalità completamento) +
-    l'inizio del programma da completare + stimolo direzionale."""
+    """User message for MultiPL-E = instruction (completion mode) + the start of
+    the program to complete + directional stimulus."""
     from .multipl_e import LANG_LABELS
     lang = LANG_LABELS.get(problem.get("language", ""),
                            problem.get("language", "") or "il linguaggio indicato")
@@ -374,15 +380,16 @@ def _build_prompt_multipl_e(problem: dict) -> str:
 
 def build_prompt(problem: dict) -> str:
     """
-    Messaggio user finale = enunciato del problema + stimolo direzionale.
+    Final user message = problem statement + directional stimulus.
 
-    È questo il punto in cui DSP entra in gioco: oltre all'istruzione fissa nel
-    system prompt, ogni problema riceve hint mirati che lo guidano alla soluzione.
+    This is where DSP comes into play: besides the fixed instruction in the
+    system prompt, every problem receives targeted hints that guide it to the
+    solution.
 
-    Riconosce automaticamente il benchmark: MultiPL-E (presenza di `stop_tokens`),
-    Plot2Code (presenza di `instruction`), DS-1000 (presenza di `code_context`),
-    MBPP (presenza di `test_list`, descrizione naturale + test), HumanEval (firma
-    + docstring).
+    It auto-detects the benchmark: MultiPL-E (presence of `stop_tokens`),
+    Plot2Code (presence of `instruction`), DS-1000 (presence of `code_context`),
+    MBPP (presence of `test_list`, natural description + tests), HumanEval
+    (signature + docstring).
     """
     if "stop_tokens" in problem:
         return _build_prompt_multipl_e(problem)

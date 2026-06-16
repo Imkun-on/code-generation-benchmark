@@ -1,21 +1,21 @@
 """
-cli.py — Entrypoint del benchmark (Typer + Rich).
+cli.py — Benchmark entrypoint (Typer + Rich).
 
-Typer gestisce il parsing degli argomenti (con `--help` formattato da Rich e le
-opzioni raggruppate in pannelli); il resto dell'output — menù interattivo,
-tabelle, pannelli di avanzamento e riepilogo — resta su `rich.Console`.
+Typer handles the argument parsing (with the `--help` formatted by Rich and the
+options grouped into panels); the rest of the output — interactive menu, tables,
+progress and summary panels — stays on `rich.Console`.
 
-Equivale a `python -m model.claude`.
+Equivalent to `python -m model.claude`.
 
-Esempi:
-    python cli.py                              # menù interattivo: scegli il benchmark
-    python cli.py --list                       # elenca i modelli e quali hanno la chiave
-    python cli.py --benchmark mbpp --limit 5   # giro di prova economico
-    python cli.py -b multipl-e                 # MultiPL-E (24 linguaggi, file unico)
-    python cli.py --models claude-opus-4.7 --models deepseek-v4-flash   # sottoinsieme di modelli
+Examples:
+    python cli.py                              # interactive menu: choose the benchmark
+    python cli.py --list                       # list the models and which have a key
+    python cli.py --benchmark mbpp --limit 5   # cheap trial run
+    python cli.py -b multipl-e                 # MultiPL-E (24 languages, single file)
+    python cli.py --models claude-opus-4.7 --models deepseek-v4-flash   # subset of models
 
-Risultati in results/<modello>/<benchmark>/: <modello>.json (record completo), <modello>.csv
-e results.xlsx (dettaglio, per-modello), <modello>.jsonl (checkpoint per la ripresa).
+Results in results/<model>/<benchmark>/: <model>.json (complete record), <model>.csv
+and results.xlsx (detail, per-model), <model>.jsonl (checkpoint for resuming).
 """
 
 import os
@@ -49,6 +49,8 @@ app = typer.Typer(
 
 
 def has_key(provider: str) -> bool:
+    """True if the provider's API key is set in the environment (drives which
+    models appear as runnable in the menus and --list)."""
     return bool(os.environ.get(PROVIDER_ENV_KEYS[provider], "").strip())
 
 
@@ -67,10 +69,10 @@ ARCH_ICON = {"LLM": "🧠", "MoE": "🧩", "SLM": "⚡", "VLM": "👁️"}
 
 
 def _multipl_e_runnable() -> tuple[int, int]:
-    """(n. linguaggi MultiPL-E ESEGUIBILI ora, n. totale). MultiPL-E genera solo per
-    i linguaggi con il runtime presente, quindi nel menù mostriamo quel numero
-    (non 24): è ciò che verrà davvero testato. Best-effort: (None, totale) se non
-    rilevabile."""
+    """(number of MultiPL-E languages RUNNABLE now, total number). MultiPL-E only
+    generates for the languages whose runtime is present, so in the menu we show
+    that number (not 24): it is what will actually be tested. Best-effort: (None,
+    total) if not detectable."""
     try:
         from model.executor import multipl_e_runnable
         from model.multipl_e import LANGUAGES
@@ -80,7 +82,7 @@ def _multipl_e_runnable() -> tuple[int, int]:
 
 
 def print_banner() -> None:
-    """Intestazione stilizzata all'avvio della CLI."""
+    """Styled header shown at CLI startup."""
     title = Text("🧪  CODE GENERATION BENCHMARK", style="bold bright_cyan", justify="center")
     subtitle = Text("Claude Opus 4.7 · confronto per architettura  LLM · MoE · SLM",
                     style="italic grey70", justify="center")
@@ -93,7 +95,8 @@ def print_banner() -> None:
 
 
 def _validate_benchmark(value: Optional[str]) -> Optional[str]:
-    """Valida il nome del benchmark (None = lo si chiederà col menù interattivo)."""
+    """Validate the benchmark name (None = it will be asked via the interactive
+    menu). Raises typer.BadParameter for an unknown name."""
     if value is not None and value not in BENCHMARKS:
         raise typer.BadParameter(
             f"{value!r} non è un benchmark valido. Disponibili: {', '.join(BENCHMARKS)}.")
@@ -101,11 +104,11 @@ def _validate_benchmark(value: Optional[str]) -> Optional[str]:
 
 
 def choose_benchmark() -> str:
-    """Menù interattivo per scegliere il benchmark quando non è passato da CLI.
+    """Interactive menu to choose the benchmark when it is not passed via CLI.
 
-    Mostra i benchmark disponibili (con n. problemi) e chiede quale usare, con
-    HumanEval come default. Usato solo in modalità interattiva (terminale); se
-    l'input non è un terminale si ripiega sul default senza bloccare."""
+    Shows the available benchmarks (with their problem counts) and asks which to
+    use, with HumanEval as the default. Used only in interactive mode (terminal);
+    if the input is not a terminal it falls back to the default without blocking."""
     if not sys.stdin.isatty():
         return "humaneval"  # non interattivo (pipe/CI): default, niente blocchi
 
@@ -145,7 +148,7 @@ def choose_benchmark() -> str:
 
 
 def cmd_list() -> None:
-    """Elenca i modelli configurati e se hanno la API key impostata."""
+    """List the configured models and whether their API key is set."""
     table = Table(
         title="🤖  Modelli configurati", title_style="bold bright_cyan",
         box=HEAVY_HEAD, border_style="bright_cyan", header_style="bold cyan",
@@ -174,8 +177,8 @@ TOPUP_URLS = {
 
 
 def _balance_cell(provider: str) -> str:
-    """Cella 'saldo' per la tabella modelli: importo colorato (rosso se a zero)
-    se il provider espone il saldo via API (DeepSeek), altrimenti 'n/d'."""
+    """'Balance' cell for the models table: a colored amount (red if zero) if the
+    provider exposes the balance via API (DeepSeek), otherwise 'n/a'."""
     bal = get_balance(provider)
     if bal is None:
         return "[grey50]n/d (solo console)[/]"
@@ -186,9 +189,9 @@ def _balance_cell(provider: str) -> str:
 
 
 def choose_models(benchmark: str) -> Optional[List[str]]:
-    """Menù interattivo: quale modello testare, con il saldo API dove il provider
-    lo espone. Ritorna le chiavi scelte; None = tutti quelli con chiave (anche
-    quando non è un terminale, per non bloccare pipe/CI)."""
+    """Interactive menu: which model to test, with the API balance where the
+    provider exposes it. Returns the chosen keys; None = all those with a key
+    (also when it is not a terminal, so as not to block pipe/CI)."""
     runnable = [m for m in ALL_MODELS if has_key(m.provider)]
     if not sys.stdin.isatty() or not runnable:
         return None
@@ -231,8 +234,9 @@ def choose_models(benchmark: str) -> Optional[List[str]]:
 
 
 def warn_zero_balance(specs) -> None:
-    """Avviso evidente se un modello selezionato ha il credito a zero (solo dove il
-    saldo è noto, cioè DeepSeek). Vale sia dal menù sia da --models."""
+    """Prominent warning if a selected model has zero credit (only where the
+    balance is known, i.e. DeepSeek). Applies both from the menu and from
+    --models."""
     for m in specs:
         if not has_key(m.provider):
             continue
@@ -277,7 +281,11 @@ def main(
         False, "--list", rich_help_panel="Info",
         help="Elenca i modelli configurati ed esci."),
 ) -> None:
-    """Esegue un benchmark di generazione di codice e salva i risultati in [bold]results/<modello>/<benchmark>/[/]."""
+    """Run a code generation benchmark and save the results to [bold]results/<model>/<benchmark>/[/].
+
+    This is the Typer command body: it loads the .env, resolves the benchmark and
+    the models (from flags or interactive menus), warns about zero balances and
+    then delegates to run_benchmark."""
     load_dotenv()
     print_banner()
 

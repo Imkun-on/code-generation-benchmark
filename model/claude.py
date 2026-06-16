@@ -1,19 +1,22 @@
 """
-claude.py — Entrypoint standalone: `python -m model.claude`.
+claude.py — Standalone entrypoint: `python -m model.claude`.
 
-Equivalente a `python cli.py`: delega alla **stessa** CLI Typer definita in
-`cli.py` (così i due entrypoint accettano esattamente gli stessi argomenti e
-mostrano lo stesso `--help` formattato con Rich). La definizione dei modelli e la
-chiamata alle API vivono in `model/providers.py`.
+Equivalent to `python cli.py`: it delegates to the **same** Typer CLI defined in
+`cli.py` (so the two entrypoints accept exactly the same arguments and show the
+same Rich-formatted `--help`). The model definitions and the API calls live in
+`model/providers.py`.
 
-Esempio:
+Example:
     python -m model.claude --benchmark ds1000 --limit 5
     python -m model.claude -b multipl-e -n 3
 """
 
 
 def standalone_main() -> None:
-    """Avvia la CLI Typer condivisa (vedi cli.py)."""
+    """Launch the shared Typer CLI (see cli.py).
+
+    Provided so the project can also be run as a module (`python -m model.claude`)
+    in addition to `python cli.py`; both paths end up running the same app."""
     # `cli` è il modulo a livello di progetto (la root è sul sys.path quando si
     # lancia `python -m model.claude`). Importarlo definisce l'app Typer senza
     # eseguirla; qui la eseguiamo.

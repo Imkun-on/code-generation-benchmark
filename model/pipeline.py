@@ -1,25 +1,25 @@
 """
-pipeline.py — Esecuzione del benchmark (orchestrazione) con PAUSA e RIPRESA.
+pipeline.py — Benchmark execution (orchestration) with PAUSE and RESUME.
 
-  run_model(spec, problems)   -> testa UN modello, salvando ogni esito su checkpoint
-  run_benchmark(models, ...)  -> testa i modelli, salva i json e stampa il report
+  run_model(spec, problems)   -> tests ONE model, saving every outcome to a checkpoint
+  run_benchmark(models, ...)  -> tests the models, saves the json and prints the report
 
-Usato da cli.py e da `python -m model.claude`.
+Used by cli.py and by `python -m model.claude`.
 
-PAUSA / RIPRESA
+PAUSE / RESUME
 ---------------
-Premi Ctrl+C per fermarti in modo pulito: il problema in corso viene completato
-e salvato, poi il run si ferma. Al rilancio successivo riprende dai problemi
-NON ancora fatti, senza rifare (e ripagare) le query già spese.
+Press Ctrl+C to stop cleanly: the problem in progress is completed and saved,
+then the run stops. On the next relaunch it resumes from the problems NOT yet
+done, without redoing (and re-paying for) the queries already spent.
 
-Il progresso è salvato problema-per-problema in `results/<modello>.jsonl`
-(checkpoint append-only): è questa la fonte di verità per la ripresa, robusta
-anche a uno stop forzato (doppio Ctrl+C). Gli errori d'API (infrastruttura) NON
-contano come "fatto" e vengono ritentati alla ripresa. Usa fresh=True per
-ignorare il checkpoint e ripartire da zero.
+Progress is saved problem-by-problem in `results/<model>.jsonl` (append-only
+checkpoint): this is the source of truth for resuming, robust even to a forced
+stop (double Ctrl+C). API errors (infrastructure) do NOT count as "done" and are
+retried on resume. Use fresh=True to ignore the checkpoint and restart from
+scratch.
 
-L'avanzamento è mostrato con una barra rich: problema corrente, percentuale,
-N/M completati, tempo trascorso e tempo stimato rimanente (ETA).
+Progress is shown with a rich bar: current problem, percentage, N/M completed,
+elapsed time and estimated remaining time (ETA).
 """
 
 import json
@@ -84,8 +84,8 @@ _stop_event = threading.Event()
 
 
 def _sigint_handler(signum, frame):
-    """Primo Ctrl+C: chiede uno stop pulito (alza il flag, il loop si ferma dopo
-    il problema corrente). Secondo Ctrl+C: stop forzato."""
+    """First Ctrl+C: requests a clean stop (raises the flag, the loop stops after
+    the current problem). Second Ctrl+C: forced stop."""
     if _stop_event.is_set():
         raise KeyboardInterrupt
     _stop_event.set()
@@ -94,11 +94,13 @@ def _sigint_handler(signum, frame):
 
 
 def has_key(provider: str) -> bool:
+    """True if the provider's API key is set in the environment (used to skip
+    models without credentials instead of failing the whole run)."""
     return bool(os.environ.get(PROVIDER_ENV_KEYS[provider], "").strip())
 
 
 def _progress_columns():
-    """Colonne della barra: spinner, descrizione, barra, %, N/M, tempo, ETA."""
+    """Columns of the progress bar: spinner, description, bar, %, N/M, time, ETA."""
     return (
         SpinnerColumn("dots", style="bright_cyan"),
         TextColumn("{task.description}"),
@@ -115,17 +117,19 @@ def _progress_columns():
 
 
 def _checkpoint_path(out_dir: Path, key: str) -> Path:
+    """Path of a model's append-only checkpoint file (`<key>.jsonl`) inside its
+    output directory."""
     return out_dir / f"{key}.jsonl"
 
 
 def _reference_for(problem: dict, benchmark: str) -> str:
-    """Riferimento per il CodeBLEU (codice-vs-codice, MAI i test).
+    """Reference for CodeBLEU (code-vs-code, NEVER the tests).
 
-    - MBPP: il campo `code` è già la funzione di riferimento completa.
-    - DS-1000: il campo `reference_code` (la soluzione gold), MAI il code_context.
-    - Plot2Code: il campo `code` (lo script matplotlib di riferimento).
-    - MultiPL-E: nessun gold → "" (CodeBLEU non calcolabile).
-    - HumanEval: `codice_completo` (prompt+soluzione, docstring rimossa)."""
+    - MBPP: the `code` field is already the complete reference function.
+    - DS-1000: the `reference_code` field (the gold solution), NEVER code_context.
+    - Plot2Code: the `code` field (the reference matplotlib script).
+    - MultiPL-E: no gold → "" (CodeBLEU not computable).
+    - HumanEval: `codice_completo` (prompt+solution, docstring removed)."""
     if benchmark == "mbpp":
         return problem.get("code", "")
     if benchmark == "ds1000":
@@ -139,8 +143,9 @@ def _reference_for(problem: dict, benchmark: str) -> str:
 
 def _build_record(problem: dict, code: str, result: dict, usage,
                   spec: ModelSpec, benchmark: str) -> dict:
-    """Record per-problema. I campi comuni (identità, esito, metriche, token)
-    sono identici per i due benchmark; i campi originali del dataset cambiano."""
+    """Per-problem record. The common fields (identity, outcome, metrics, tokens)
+    are identical across benchmarks; the dataset's original fields differ per
+    benchmark (MBPP/DS-1000/Plot2Code/MultiPL-E/HumanEval)."""
     reference = _reference_for(problem, benchmark)
     record = {
         "task_id": problem["task_id"],
@@ -216,8 +221,8 @@ def _build_record(problem: dict, code: str, result: dict, usage,
 
 
 def _load_checkpoint(path: Path) -> dict:
-    """Legge il checkpoint -> {task_id: record}, tenendo l'ULTIMO record per
-    ogni task_id (così un retry sovrascrive il vecchio esito)."""
+    """Read the checkpoint -> {task_id: record}, keeping the LAST record for each
+    task_id (so a retry overwrites the old outcome)."""
     done: dict[str, dict] = {}
     if path.exists():
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -233,16 +238,16 @@ def _load_checkpoint(path: Path) -> dict:
 
 
 def _is_done(record: dict | None) -> bool:
-    """Un problema è 'fatto' se ha un esito reale del modello (anche fallito),
-    ma NON se è un errore d'API: quello va ritentato alla ripresa."""
+    """A problem is 'done' if it has a real model outcome (even a failed one), but
+    NOT if it is an API error: that one must be retried on resume."""
     return record is not None and record.get("category") != "APIError"
 
 
 def run_model(spec: ModelSpec, problems: list[dict], out_dir: Path,
               benchmark: str = "humaneval", timeout: float = 10.0,
               progress: Progress | None = None, task_id=None) -> list[dict]:
-    """Esegue `spec` su `problems`, riprendendo dal checkpoint e salvando ogni
-    esito man mano. Si ferma in modo pulito se `_stop_event` viene alzato."""
+    """Run `spec` over `problems`, resuming from the checkpoint and saving each
+    outcome as it goes. Stops cleanly if `_stop_event` is raised."""
     ckpt = _checkpoint_path(out_dir, spec.key)
     done = _load_checkpoint(ckpt)
     todo = [p for p in problems if not _is_done(done.get(p["task_id"]))]
@@ -306,13 +311,14 @@ def run_model(spec: ModelSpec, problems: list[dict], out_dir: Path,
 def run_benchmark(models: list[ModelSpec], benchmark: str = "humaneval",
                   limit: int | None = None, timeout: float | None = None,
                   fresh: bool = False, libraries: list[str] | None = None) -> dict:
-    """Carica il benchmark scelto, testa i modelli con API key, salva i risultati
-    in results/<modello>/<benchmark>/ e stampa il report.
+    """Load the chosen benchmark, test the models that have an API key, save the
+    results to results/<model>/<benchmark>/ and print the report.
 
-    benchmark: "humaneval" (default), "mbpp" o "ds1000".
-    fresh=True ignora i checkpoint esistenti e riparte da zero (cancella i .jsonl).
-    libraries: (solo DS-1000) limita ai sottoinsiemi indicati; le librerie non
-               installate vengono saltate con avviso (no tagli silenziosi)."""
+    benchmark: "humaneval" (default), "mbpp" or "ds1000".
+    fresh=True ignores the existing checkpoints and restarts from scratch (deletes
+    the .jsonl).
+    libraries: (DS-1000 only) restricts to the listed subsets; the uninstalled
+               libraries are skipped with a warning (no silent truncation)."""
     if benchmark not in BENCHMARKS:
         raise ValueError(f"Benchmark sconosciuto: {benchmark!r}. "
                          f"Disponibili: {', '.join(BENCHMARKS)}")
@@ -325,6 +331,8 @@ def run_benchmark(models: list[ModelSpec], benchmark: str = "humaneval",
     # mai tra modelli diversi (prima il results.xlsx era condiviso per benchmark →
     # il run di un modello cancellava i dati dell'altro nell'Excel).
     def out_dir_for(key: str) -> Path:
+        """Output directory for one model: results/<model>/<benchmark>/, so files
+        never overwrite each other across different models."""
         return RESULTS_DIR / key / benchmark
 
     runnable = [m for m in models if has_key(m.provider)]

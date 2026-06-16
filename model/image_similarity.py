@@ -1,33 +1,32 @@
 """
-image_similarity.py — Confronto visivo DETERMINISTICO tra il plot generato e
-quello di riferimento (Plot2Code).
+image_similarity.py — DETERMINISTIC visual comparison between the generated plot
+and the reference one (Plot2Code).
 
-Non esiste una singola metrica che catturi INSIEME colori, testo (titoli, label
-assi, legenda) e disposizione dei dati: sono assi ortogonali e un numero unico li
-mischia in modo non interpretabile. Usiamo quindi un punteggio COMPOSITO,
-decomposto in tre componenti indipendenti — ognuna con la metrica adatta — più
-una media pesata `composite`:
+There is no single metric that captures colors, text (titles, axis labels,
+legend) and data layout TOGETHER: they are orthogonal axes and a single number
+mixes them in a non-interpretable way. So we use a COMPOSITE score, decomposed
+into three independent components — each with the appropriate metric — plus a
+weighted average `composite`:
 
-  text_match  Testo (titolo, assi, legenda, tick) via OCR Tesseract -> F1 sui
-              token. Richiede il MOTORE Tesseract installato (non basta il
-              wrapper `pytesseract`). Se manca, la componente è None: il run NON
-              si interrompe (degradazione pulita, come codebleu in metrics.py).
-  ssim        Struttura / posizione dei dati (punti, linee): SSIM in scala di
-              grigi. Implementato con numpy+scipy (NIENTE scikit-image, che su
-              Python 3.14/Windows non ha wheel affidabili — vedi env-gotchas).
-  color_sim   Palette dei colori: istogramma RGB 3D dei soli pixel NON di sfondo
-              (mascheriamo il bianco, che altrimenti domina e appiattisce tutto)
-              -> intersezione di istogrammi.
+  text_match  Text (title, axes, legend, ticks) via Tesseract OCR -> token F1.
+              Requires the Tesseract ENGINE installed (the `pytesseract` wrapper
+              is not enough). If missing, the component is None: the run does NOT
+              abort (clean degradation, like codebleu in metrics.py).
+  ssim        Structure / position of the data (points, lines): grayscale SSIM.
+              Implemented with numpy+scipy (NO scikit-image, which on Python
+              3.14/Windows has no reliable wheels — see env-gotchas).
+  color_sim   Color palette: 3D RGB histogram of the NON-background pixels only
+              (we mask the white, which would otherwise dominate and flatten
+              everything) -> histogram intersection.
 
-Tutte le componenti sono in [0,1] (1 = identiche). `composite` è la media pesata
-delle componenti DISPONIBILI: le None vengono ignorate e i pesi rinormalizzati,
-così il composito resta calcolabile anche senza Tesseract.
+All components are in [0,1] (1 = identical). `composite` is the weighted average
+of the AVAILABLE components: the None ones are ignored and the weights
+renormalized, so the composite stays computable even without Tesseract.
 
-Robustezza: qualsiasi errore (immagine mancante/corrotta, dipendenza assente)
-degrada a None per quella componente, senza mai interrompere il run del benchmark.
-numpy/PIL sono importati a livello di modulo: questo file viene importato SOLO nel
-ramo Plot2Code della pipeline, quindi un'installazione per il solo HumanEval non è
-costretta a installarli.
+Robustness: any error (missing/corrupt image, absent dependency) degrades to None
+for that component, without ever aborting the benchmark run. numpy/PIL are
+imported at module level: this file is imported ONLY in the Plot2Code branch of
+the pipeline, so an install for HumanEval-only is not forced to install them.
 """
 
 from collections import Counter
@@ -49,8 +48,8 @@ _LUMA = np.array([0.299, 0.587, 0.114])
 
 
 def _try(fn):
-    """Esegue `fn` e ritorna None su qualunque eccezione (componente non
-    calcolabile = None, mai un crash)."""
+    """Run `fn` and return None on any exception (a non-computable component =
+    None, never a crash)."""
     try:
         return fn()
     except Exception:
@@ -58,7 +57,7 @@ def _try(fn):
 
 
 def _load_rgb(path: str, size) -> np.ndarray:
-    """Carica un PNG come array RGB float (H, W, 3), riportato a `size`."""
+    """Load a PNG as a float RGB array (H, W, 3), resized to `size`."""
     img = Image.open(path).convert("RGB")
     if img.size != size:
         img = img.resize(size, Image.BILINEAR)
@@ -66,8 +65,8 @@ def _load_rgb(path: str, size) -> np.ndarray:
 
 
 def _ssim(a_gray: np.ndarray, b_gray: np.ndarray) -> float:
-    """SSIM globale (media della mappa) con finestra gaussiana 11x11 sigma=1.5,
-    formulazione standard di Wang et al. 2004. Solo numpy+scipy."""
+    """Global SSIM (mean of the map) with an 11x11 gaussian window sigma=1.5, the
+    standard formulation of Wang et al. 2004. numpy+scipy only."""
     from scipy.ndimage import gaussian_filter
 
     L = 255.0
@@ -88,10 +87,10 @@ def _ssim(a_gray: np.ndarray, b_gray: np.ndarray) -> float:
 
 def _color_sim(a_rgb: np.ndarray, b_rgb: np.ndarray,
                bins: int = 8, white_thresh: int = 240) -> float:
-    """Intersezione di istogrammi RGB 3D calcolati sui soli pixel NON di sfondo.
-    Il bianco dello sfondo, se incluso, domina e rende tutti i plot 'simili':
-    lo mascheriamo (un pixel è 'inchiostro' se il suo canale minimo <= soglia).
-    Se resta quasi solo sfondo, ripieghiamo sull'immagine intera."""
+    """Intersection of 3D RGB histograms computed on the NON-background pixels
+    only. The white background, if included, dominates and makes all plots look
+    'similar': we mask it (a pixel is 'ink' if its minimum channel <= threshold).
+    If almost only background remains, we fall back to the whole image."""
     def hist(rgb):
         flat = rgb.reshape(-1, 3)
         ink = flat[flat.min(axis=1) <= white_thresh]
@@ -105,8 +104,8 @@ def _color_sim(a_rgb: np.ndarray, b_rgb: np.ndarray,
 
 
 def _ocr_tokens(path: str) -> list[str]:
-    """Token alfanumerici (minuscoli) estratti dall'immagine via Tesseract.
-    Solleva se il motore non è installato: il chiamante lo intercetta."""
+    """Alphanumeric (lowercase) tokens extracted from the image via Tesseract.
+    Raises if the engine is not installed: the caller catches it."""
     import pytesseract
 
     text = pytesseract.image_to_string(Image.open(path)).lower()
@@ -115,8 +114,8 @@ def _ocr_tokens(path: str) -> list[str]:
 
 
 def _text_match(ref_path: str, gen_path: str):
-    """F1 sui multiset di token OCR (titoli/assi/legenda/tick). None se il motore
-    Tesseract non è disponibile."""
+    """F1 over the multisets of OCR tokens (titles/axes/legend/ticks). None if the
+    Tesseract engine is unavailable."""
     try:
         ref = _ocr_tokens(ref_path)
         gen = _ocr_tokens(gen_path)
@@ -135,8 +134,8 @@ def _text_match(ref_path: str, gen_path: str):
 
 
 def _composite(parts: dict):
-    """Media pesata delle componenti disponibili (None ignorate, pesi
-    rinormalizzati). None se nessuna componente è calcolabile."""
+    """Weighted average of the available components (None ones ignored, weights
+    renormalized). None if no component is computable."""
     avail = {k: v for k, v in parts.items() if v is not None}
     if not avail:
         return None
@@ -145,11 +144,11 @@ def _composite(parts: dict):
 
 
 def image_similarity(ref_path: str, gen_path: str):
-    """Confronta il PNG di riferimento con quello generato dal modello.
+    """Compare the reference PNG with the one generated by the model.
 
-    Ritorna {text_match, ssim, color_sim, composite} (valori in [0,1] o None per
-    le componenti non calcolabili), oppure None se manca il render generato
-    (nessuna figura da confrontare — es. il codice non ha prodotto un PNG)."""
+    Returns {text_match, ssim, color_sim, composite} (values in [0,1] or None for
+    the non-computable components), or None if the generated render is missing (no
+    figure to compare — e.g. the code did not produce a PNG)."""
     if not ref_path or not gen_path:
         return None
     try:

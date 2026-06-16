@@ -1,34 +1,34 @@
 """
-ds1000.py — Caricamento del benchmark DS-1000 (xlangai/DS-1000).
+ds1000.py — Loading the DS-1000 benchmark (xlangai/DS-1000).
 
-DS-1000 (Lai et al., 2022) raccoglie 1000 problemi di data science presi da
-StackOverflow su 7 librerie Python (Pandas, NumPy, Matplotlib, Scikit-learn,
-SciPy, PyTorch, TensorFlow). Ogni problema chiede di completare uno snippet di
-codice; la valutazione è per esecuzione.
+DS-1000 (Lai et al., 2022) gathers 1000 data science problems taken from
+StackOverflow over 7 Python libraries (Pandas, NumPy, Matplotlib, Scikit-learn,
+SciPy, PyTorch, TensorFlow). Each problem asks to complete a code snippet;
+evaluation is by execution.
 
-Struttura di un problema (test.jsonl):
-  prompt          descrizione + scheletro di codice con il punto da completare
-  reference_code  soluzione gold (frammento) — riferimento per il CodeBLEU
-  code_context    harness di test COMPLETO: definisce test_execution(solution)
-                  (ed eventualmente test_string), che solleva AssertionError se
-                  la soluzione è sbagliata. Contiene il segnaposto [insert].
-  metadata        dict con problem_id, library, perturbation_type, test_case_cnt…
+Structure of a problem (test.jsonl):
+  prompt          description + code skeleton with the point to complete
+  reference_code  gold solution (fragment) — reference for CodeBLEU
+  code_context    COMPLETE test harness: defines test_execution(solution)
+                  (and possibly test_string), which raises AssertionError if
+                  the solution is wrong. Contains the [insert] placeholder.
+  metadata        dict with problem_id, library, perturbation_type, test_case_cnt…
 
-A differenza di HumanEval/MBPP, il task_id non è una colonna top-level: lo
-ricaviamo da metadata.problem_id (intero 0–999) e lo aggiungiamo per compatibilità
-con la pipeline (checkpoint, dedup, report).
+Unlike HumanEval/MBPP, the task_id is not a top-level column: we derive it from
+metadata.problem_id (integer 0–999) and add it for compatibility with the
+pipeline (checkpoint, dedup, report).
 
-Nota CodeBLEU: il riferimento è `reference_code` (la soluzione gold), MAI il
-`code_context` (che è il grader, non un riferimento di codice).
+CodeBLEU note: the reference is `reference_code` (the gold solution), NEVER the
+`code_context` (which is the grader, not a code reference).
 
-Come per gli altri benchmark, il dataset viene salvato in locale in
-Benchmark/ds1000/ (con save_to_disk) al primo run e riletto da lì in seguito.
+As with the other benchmarks, the dataset is saved locally in Benchmark/ds1000/
+(with save_to_disk) on the first run and read back from there afterward.
 
-⚠️ Esecuzione: a differenza di HumanEval/MBPP (solo stdlib), DS-1000 richiede le
-librerie data-science installate (numpy, pandas, scipy, scikit-learn, matplotlib
-e — per i rispettivi sottoinsiemi — tensorflow, pytorch). I problemi delle
-librerie non installate falliranno con ModuleNotFoundError. Si può filtrare per
-libreria con il parametro `libraries`.
+⚠️ Execution: unlike HumanEval/MBPP (stdlib only), DS-1000 requires the
+data-science libraries installed (numpy, pandas, scipy, scikit-learn, matplotlib
+and — for the respective subsets — tensorflow, pytorch). Problems of the
+uninstalled libraries will fail with ModuleNotFoundError. You can filter by
+library with the `libraries` parameter.
 """
 
 import importlib.util
@@ -67,8 +67,8 @@ _CANONICAL = {name.lower(): name for name in DS1000_LIBRARIES}
 
 
 def _canonical(library: str) -> str:
-    """Normalizza un nome di libreria al casing canonico (case-insensitive).
-    Solleva ValueError con l'elenco valido se il nome è sconosciuto."""
+    """Normalize a library name to its canonical casing (case-insensitive).
+    Raises ValueError with the list of valid names if the name is unknown."""
     key = library.strip().lower()
     if key not in _CANONICAL:
         raise ValueError(
@@ -79,8 +79,8 @@ def _canonical(library: str) -> str:
 
 
 def _is_importable(library: str) -> bool:
-    """True se il modulo della libreria è importabile, SENZA importarlo davvero
-    (usa find_spec: niente effetti collaterali né il costo di caricare TF/Torch)."""
+    """True if the library's module is importable, WITHOUT actually importing it
+    (uses find_spec: no side effects and no cost of loading TF/Torch)."""
     module = DS1000_IMPORT_NAMES[library]
     try:
         return importlib.util.find_spec(module) is not None
@@ -92,14 +92,14 @@ def _is_importable(library: str) -> bool:
 
 def available_libraries(requested: list[str] | None = None
                         ) -> tuple[list[str], list[str]]:
-    """Divide le librerie richieste in (disponibili, mancanti) in base a quali
-    moduli sono installati nell'ambiente.
+    """Split the requested libraries into (available, missing) based on which
+    modules are installed in the environment.
 
-    requested: nomi scelti dall'utente (--libraries), case-insensitive; None =
-               tutte e 7. I nomi sconosciuti sollevano ValueError.
+    requested: names chosen by the user (--libraries), case-insensitive; None =
+               all 7. Unknown names raise ValueError.
 
-    Ritorna (available, missing) con i nomi al casing canonico, preservando
-    l'ordine e deduplicando. Es. su Python 3.14 senza TF:
+    Returns (available, missing) with canonical-cased names, preserving order
+    and deduplicating. E.g. on Python 3.14 without TF:
         available_libraries() -> ([Pandas..Pytorch], ["Tensorflow"]).
     """
     names = [_canonical(l) for l in requested] if requested else list(DS1000_LIBRARIES)
@@ -111,8 +111,8 @@ def available_libraries(requested: list[str] | None = None
 
 
 def library_counts() -> dict[str, int]:
-    """Numero di problemi per libreria sull'intero set (1000). Utile al report
-    per dire quanti problemi vengono saltati quando una libreria non c'è."""
+    """Number of problems per library over the whole set (1000). Useful for the
+    report to state how many problems are skipped when a library is missing."""
     counts: dict[str, int] = {}
     for p in load_ds1000():
         lib = (p.get("metadata") or {}).get("library", "")
@@ -122,21 +122,21 @@ def library_counts() -> dict[str, int]:
 
 def plan_run(limit: int | None = None,
              requested: list[str] | None = None) -> tuple[list[dict], dict]:
-    """Risolve quali librerie eseguire e carica SOLO i problemi eseguibili.
+    """Resolve which libraries to run and load ONLY the runnable problems.
 
-    Una sola lettura del dataset: rileva le librerie installate fra quelle
-    richieste, carica i 1000 problemi, ne tiene i sottoinsiemi disponibili e
-    calcola il riepilogo per il report (nessun taglio silenzioso).
+    A single read of the dataset: detects the installed libraries among the
+    requested ones, loads the 1000 problems, keeps the available subsets and
+    computes the summary for the report (no silent truncation).
 
-    requested: librerie scelte (--libraries) o None = tutte.
-    limit: tetto sui problemi DOPO il filtro per libreria (test rapidi).
+    requested: chosen libraries (--libraries) or None = all.
+    limit: cap on the problems AFTER the per-library filter (quick tests).
 
-    Ritorna (problems, info) con info = {
-        "available": [...],   librerie eseguite
-        "missing":   [...],   librerie richieste ma non installate (saltate)
-        "counts":    {lib: n} problemi per libreria sull'intero set
-        "total":     1000,    problemi totali del set completo
-        "selected":  N,       problemi effettivamente eseguiti (= len(problems))
+    Returns (problems, info) with info = {
+        "available": [...],   libraries being run
+        "missing":   [...],   requested but uninstalled libraries (skipped)
+        "counts":    {lib: n} problems per library over the whole set
+        "total":     1000,    total problems of the full set
+        "selected":  N,       problems actually run (= len(problems))
     }."""
     available, missing = available_libraries(requested)
     all_problems = load_ds1000()
@@ -165,15 +165,15 @@ def plan_run(limit: int | None = None,
 def load_ds1000(limit: int | None = None,
                 libraries: list[str] | None = None) -> list[dict]:
     """
-    Carica i 1000 problemi di DS-1000.
+    Load the 1000 DS-1000 problems.
 
-    Primo run: scarica test.jsonl da Hugging Face e salva in Benchmark/ds1000/.
-    Run successivi: rilegge direttamente da quella cartella (nessun download).
+    First run: downloads test.jsonl from Hugging Face and saves to Benchmark/ds1000/.
+    Subsequent runs: reads directly from that folder (no download).
 
-    limit: se valorizzato, prende solo i primi N problemi (test rapidi/economici).
-    libraries: se valorizzato, tiene solo i problemi delle librerie indicate
-               (es. ["Pandas", "Numpy"]) — utile per saltare i sottoinsiemi le
-               cui librerie non sono installate (es. Tensorflow/Pytorch).
+    limit: if set, takes only the first N problems (quick/cheap tests).
+    libraries: if set, keeps only the problems of the listed libraries
+               (e.g. ["Pandas", "Numpy"]) — useful to skip the subsets whose
+               libraries are not installed (e.g. Tensorflow/Pytorch).
     """
     BENCHMARK_DIR.mkdir(exist_ok=True)
 

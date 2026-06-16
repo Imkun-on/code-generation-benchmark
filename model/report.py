@@ -1,9 +1,9 @@
 """
-report.py — Aggregazione dei risultati e stampa delle tabelle.
+report.py — Aggregation of the results and printing of the tables.
 
-Produce le due viste chiave:
-  1. pass@1 per modello
-  2. distribuzione degli errori per ARCHITETTURA  (la tua analisi principale)
+Produces the two key views:
+  1. pass@1 per model
+  2. error distribution by ARCHITECTURE  (the main analysis)
 """
 
 import json
@@ -22,7 +22,12 @@ console = Console()
 
 
 def aggregate(all_records: list[dict]) -> dict:
-    """pass@1 per modello + distribuzione errori per architettura."""
+    """Aggregate the per-problem records into a summary dict.
+
+    Computes, per model: pass@1, average CodeBLEU (ignoring None), total input/
+    output tokens and estimated cost (from PRICING), the error breakdown, and the
+    average Plot2Code image similarity. Also returns the error distribution by
+    architecture. This is the structure consumed by the on-screen tables."""
     by_model = defaultdict(list)
     by_arch_errors = defaultdict(Counter)
     for r in all_records:
@@ -47,6 +52,8 @@ def aggregate(all_records: list[dict]) -> dict:
                 if isinstance(r.get("image_similarity"), dict)]
 
         def _img_mean(key, _sims=sims):
+            """Average of one image-similarity component across the records,
+            ignoring the None values; None if no record reports that component."""
             vals = [s[key] for s in _sims if s.get(key) is not None]
             return sum(vals) / len(vals) if vals else None
 
@@ -72,15 +79,18 @@ def aggregate(all_records: list[dict]) -> dict:
 
 
 def save_summary(summary: dict, results_dir: Path) -> Path:
+    """Write the aggregated summary to results_dir/summary.json and return the
+    path. (Helper kept for standalone use; the main pipeline shows the summary on
+    screen only and does not persist it.)"""
     out = results_dir / "summary.json"
     out.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     return out
 
 
 def build_summary_group(summary: dict) -> Group:
-    """Costruisce (senza stampare) le tre tabelle raggruppate: pass@1+CodeBLEU,
-    distribuzione errori, token/costo. Restituisce un Group pronto da inserire
-    in un Panel."""
+    """Build (without printing) the three grouped tables: pass@1+CodeBLEU, error
+    distribution, tokens/cost (plus a fourth image-similarity table for
+    Plot2Code). Returns a rich Group ready to be placed in a Panel."""
     title_style = "bold bright_cyan"
 
     t = Table(title="pass@1 e CodeBLEU per modello", title_style=title_style,
@@ -153,7 +163,7 @@ def build_summary_group(summary: dict) -> Group:
 
 
 def print_summary(summary: dict) -> None:
-    """Stampa le tre viste in un unico Panel (uso standalone)."""
+    """Print the three views in a single Panel (standalone use)."""
     console.print(Panel(
         build_summary_group(summary),
         title="[bold bright_cyan]📊 Risultati benchmark[/]",
