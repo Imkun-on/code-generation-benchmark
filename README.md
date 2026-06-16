@@ -33,6 +33,8 @@ pip install -r requirements.txt
 python cli.py
 ```
 
+> ℹ️ Al primo avvio i dataset dei benchmark vengono scaricati automaticamente da Hugging Face e salvati nella cartella `Benchmark/` (serve la connessione internet). Dagli avvii successivi vengono letti da lì, senza riscaricare.
+
 ---
 
 ## Table of Contents
