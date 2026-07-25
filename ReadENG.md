@@ -24,11 +24,18 @@
   <img src="https://img.shields.io/badge/Matplotlib-charts-11557C?logo=python&logoColor=white" alt="Matplotlib">
 </p>
 
+<p align="center">
+  Compare the <b>code-generation</b> abilities of three architectures: a <b>dense LLM</b> (Claude Opus 4.7), a <b>Mixture of Experts</b> (DeepSeek V4 Pro) and a <b>Small Language Model</b> (Ministral 8B),<br>
+  across <b>5 benchmarks</b> (HumanEval &middot; MBPP &middot; DS-1000 &middot; Plot2Code &middot; MultiPL-E) and <b>15 programming languages</b>.<br>
+  It measures <b>pass@1</b> (functional correctness) and <b>CodeBLEU</b> (structural similarity), tracking <b>tokens, cost</b> and <b>error categories</b>.<br>
+  A single <b>CLI</b> downloads the datasets, generates, evaluates and <b>exports the results</b> to CSV/XLSX, with an <b>analysis notebook</b> and charts.
+</p>
+
 </div>
 
 ```bash
-git clone https://github.com/Imkun-on/code-generation-benchmark.git
-cd code-generation-benchmark
+git clone https://github.com/Imkun-on/codegen_arena.git
+cd codegen_arena
 pip install -r requirements.txt
 python cli.py
 ```
@@ -37,34 +44,92 @@ python cli.py
 
 ---
 
-## Table of Contents
+## 📖 Table of Contents
 
-- [Project Description](#project-description)
-- [Architectures Compared: LLM, MoE and SLM](#architectures-compared-llm-moe-and-slm)
-- [Requirements & Installation](#requirements--installation)
-- [How to Use](#how-to-use)
-- [Project Structure](#project-structure)
-- [Benchmark: HumanEval](#benchmark-humaneval)
-- [Benchmark: MBPP](#benchmark-mbpp)
-- [Benchmark: DS-1000](#benchmark-ds-1000)
-- [Benchmark: Plot2Code](#benchmark-plot2code)
-- [Benchmark: MultiPL-E (multilingual)](#benchmark-multipl-e-multilingual)
-- [Prompting: Directional Stimulus (DSP)](#prompting-directional-stimulus-dsp)
-- [Evaluation Metrics](#evaluation-metrics)
-  - [pass@1](#pass1)
-  - [CodeBLEU](#codebleu)
-- [Results Output](#results-output)
-- [Findings](#findings)
-- [Results Analysis (Jupyter notebook)](#results-analysis-jupyter-notebook)
-- [Pause and Resume](#pause-and-resume)
-- [Error Analysis](#error-analysis)
-- [RAG](#rag)
-- [References](#references)
-- [License](#license)
+**Chapter 1 — [📋 Project Description](#-project-description)**
+
+**Chapter 2 — [🏗️ Architectures Compared: LLM, MoE and SLM](#-architectures-compared-llm-moe-and-slm)**
+- 2.1 [Dense LLM (Claude Opus 4.7)](#dense-llm-claude-opus-47)
+- 2.2 [Mixture of Experts (DeepSeek V4 Pro)](#mixture-of-experts-deepseek-v4-pro)
+- 2.3 [Small Language Model (Ministral 8B)](#small-language-model-ministral-8b)
+- 2.4 [Visual comparison of the three architectures](#visual-comparison-of-the-three-architectures)
+- 2.5 [Summary comparison](#summary-comparison)
+- 2.6 [Models and prices](#models-and-prices)
+
+**Chapter 3 — [📦 Requirements & Installation](#-requirements--installation)**
+- 3.1 [Python](#python)
+- 3.2 [Installing dependencies](#installing-dependencies)
+- 3.3 [API Key configuration](#api-key-configuration)
+
+**Chapter 4 — [🚀 How to Use](#-how-to-use)**
+- 4.1 [Inference configuration](#inference-configuration)
+
+**Chapter 5 — [🗂️ Project Structure](#-project-structure)**
+
+**Chapter 6 — [🧩 Benchmark: HumanEval](#-benchmark-humaneval)**
+- 6.1 [Dataset Structure](#dataset-structure)
+- 6.2 [Derived column: `codice_completo`](#derived-column-codice_completo)
+- 6.3 [Windows note on loading](#windows-note-on-loading)
+
+**Chapter 7 — [🧩 Benchmark: MBPP](#-benchmark-mbpp)**
+- 7.1 [Example (problem `task_id 12`)](#example-problem-task_id-12)
+- 7.2 [Which part of MBPP we use](#which-part-of-mbpp-we-use)
+- 7.3 [Why `full` and NOT `sanitized`](#why-full-and-not-sanitized)
+- 7.4 [Dataset Structure (config `full`)](#dataset-structure-config-full)
+
+**Chapter 8 — [📊 Benchmark: DS-1000](#-benchmark-ds-1000)**
+- 8.1 [Dataset Structure](#dataset-structure-1)
+- 8.2 [Example (Numpy library, *Completion* format)](#example-numpy-library-completion-format)
+- 8.3 [Two response formats: Completion and Insertion](#two-response-formats-completion-and-insertion)
+- 8.4 [Execution and installed libraries](#execution-and-installed-libraries)
+
+**Chapter 9 — [📈 Benchmark: Plot2Code](#-benchmark-plot2code)**
+- 9.1 [Dataset Structure](#dataset-structure-2)
+- 9.2 [Example](#example)
+- 9.3 [Plot2Code metrics](#plot2code-metrics)
+
+**Chapter 10 — [🌐 Benchmark: MultiPL-E (multilingual)](#-benchmark-multipl-e-multilingual)**
+- 10.1 [Dataset Structure (per `humaneval-<lang>` config)](#dataset-structure-per-humaneval-lang-config)
+- 10.2 [Example (config `humaneval-js`)](#example-config-humaneval-js)
+- 10.3 [Languages and toolchain (pass@1 requires the installed runtime)](#languages-and-toolchain-pass1-requires-the-installed-runtime)
+
+**Chapter 11 — [🎯 Prompting: Directional Stimulus (DSP)](#-prompting-directional-stimulus-dsp)**
+
+**Chapter 12 — [📏 Evaluation Metrics](#-evaluation-metrics)**
+- 12.1 [pass@1](#pass1)
+- 12.2 [CodeBLEU](#codebleu)
+
+**Chapter 13 — [💾 Results Output](#-results-output)**
+- 13.1 [Detail columns (CSV / XLSX)](#detail-columns-csv--xlsx)
+- 13.2 [On-screen summary](#on-screen-summary)
+
+**Chapter 14 — [🔍 Findings](#-findings)**
+- 14.1 [pass@1 per model and benchmark](#pass1-per-model-and-benchmark)
+
+**Chapter 15 — [📓 Results Analysis (Jupyter notebook)](#-results-analysis-jupyter-notebook)**
+- 15.1 [Which model solves the most problems on the first attempt?](#which-model-solves-the-most-problems-on-the-first-attempt)
+- 15.2 [Does correct code have to resemble the reference solution?](#does-correct-code-have-to-resemble-the-reference-solution)
+- 15.3 [Where the models go wrong: the error categories](#where-the-models-go-wrong-the-error-categories)
+- 15.4 [Can the problems Claude fails be solved by weaker models?](#can-the-problems-claude-fails-be-solved-by-weaker-models)
+- 15.5 [MultiPL-E: in which languages do the models perform best?](#multipl-e-in-which-languages-do-the-models-perform-best)
+- 15.6 [Plot2Code: how much does the generated figure resemble the reference?](#plot2code-how-much-does-the-generated-figure-resemble-the-reference)
+- 15.7 [Conclusions](#conclusions)
+
+**Chapter 16 — [⏸️ Pause and Resume](#-pause-and-resume)**
+
+**Chapter 17 — [🧯 Error Analysis](#-error-analysis)**
+- 17.1 [Categories (Python: HumanEval, MBPP, DS-1000, Plot2Code)](#categories-python-humaneval-mbpp-ds-1000-plot2code)
+- 17.2 [Categories for non-Python languages (MultiPL-E)](#categories-for-non-python-languages-multipl-e)
+
+**Chapter 18 — [🧠 RAG](#-rag)**
+
+**Chapter 19 — [📚 References](#-references)**
+
+**Chapter 20 — [📄 License](#-license)**
 
 ---
 
-## Project Description
+## 📋 Project Description
 
 This project compares the **code generation** capabilities of three language models belonging to
 different architectural families: a frontier **dense LLM** (Claude Opus 4.7), a **Mixture of
@@ -72,7 +137,7 @@ Experts** (DeepSeek V4 Pro) and a **Small Language Model** (Ministral 8B). The g
 determine which commercial product is better, but to observe how the three **architectures** behave
 on the same task, regardless of differences in training data, parameter count and the optimization
 choices of the individual providers. The three architectures are described in the
-[Architectures Compared](#architectures-compared-llm-moe-and-slm) section.
+[Architectures Compared](#-architectures-compared-llm-moe-and-slm) section.
 
 The evaluation uses **five benchmarks**: four of them (HumanEval, MBPP, DS-1000 and Plot2Code) focus
 on **Python**, while **MultiPL-E** extends the comparison to **24 programming languages**. To keep
@@ -112,7 +177,7 @@ Two notes on the less conventional benchmarks:
 
 ---
 
-## Architectures Compared: LLM, MoE and SLM
+## 🏗️ Architectures Compared: LLM, MoE and SLM
 
 All three models share the same foundation: the **decoder-only Transformer**, pre-trained to predict
 the next token over large corpora of text and code, and subsequently refined in post-training
@@ -197,7 +262,7 @@ championship):
 
 ---
 
-## Requirements & Installation
+## 📦 Requirements & Installation
 
 ### Python
 
@@ -300,7 +365,7 @@ export MISTRAL_API_KEY="your-api-key"
 
 ---
 
-## How to Use
+## 🚀 How to Use
 
 The entrypoint is `cli.py` (equivalent to `python -m model.claude`). The CLI is built with
 **Typer**: the `--help` is formatted by **Rich** (options grouped into panels) and every option also
@@ -370,12 +435,12 @@ The generation parameters live in `model/config.py`:
 
 ---
 
-## Project Structure
+## 🗂️ Project Structure
 
 `model/` is a **namespace package** (deliberately without `__init__.py`), with flat files:
 
 ```
-code-generation-benchmark/
+codegen_arena/
 ├── cli.py                  # entrypoint: argument parsing + run_benchmark
 ├── requirements.txt
 ├── Benchmark/humaneval/    # HumanEval dataset saved locally (save_to_disk)
@@ -417,7 +482,7 @@ code-generation-benchmark/
 
 ---
 
-## Benchmark: HumanEval
+## 🧩 Benchmark: HumanEval
 
 <table>
 <tr>
@@ -507,7 +572,7 @@ character limit.
 
 ---
 
-## Benchmark: MBPP
+## 🧩 Benchmark: MBPP
 
 <table>
 <tr>
@@ -630,7 +695,7 @@ first run and read back from there afterward.
 
 ---
 
-## Benchmark: DS-1000
+## 📊 Benchmark: DS-1000
 
 <table>
 <tr>
@@ -755,7 +820,7 @@ and read back from there afterward.
 
 ---
 
-## Benchmark: Plot2Code
+## 📈 Benchmark: Plot2Code
 
 <table>
 <tr>
@@ -843,7 +908,7 @@ rendering**. Three signals, saved in the output file:
 
 ---
 
-## Benchmark: MultiPL-E (multilingual)
+## 🌐 Benchmark: MultiPL-E (multilingual)
 
 <table>
 <tr>
@@ -1003,7 +1068,7 @@ first run and read back from there afterward.
 
 ---
 
-## Prompting: Directional Stimulus (DSP)
+## 🎯 Prompting: Directional Stimulus (DSP)
 
 Prompting follows **Directional Stimulus Prompting** (Li et al., 2023): in addition to a fixed
 instruction, **each problem** receives small *directional stimuli* extracted locally from the
@@ -1037,7 +1102,7 @@ model, disobeying, wraps its response in a ```` ```python ```` block).
 
 ---
 
-## Evaluation Metrics
+## 📏 Evaluation Metrics
 
 We keep **two** complementary metrics: a functional one (is the code correct?) and a structural one
 (how much does it resemble the reference solution?).
@@ -1109,7 +1174,7 @@ We use uniform weights `(0.25, 0.25, 0.25, 0.25)`.
 
 ---
 
-## Results Output
+## 💾 Results Output
 
 On each run the results end up in a **per-benchmark subfolder**: `results/humaneval/`,
 `results/mbpp/`, `results/ds1000/`, `results/plot2code/` or `results/multipl-e/` (so the benchmarks
@@ -1190,7 +1255,7 @@ At the end, a single panel shows three tables:
 
 ---
 
-## Findings
+## 🔍 Findings
 
 > ✅ **Completed runs** on the three models compared. Measurement setup: `effort=low`,
 > `thinking=disabled`, `temperature=0.0` (non-Claude), **deterministic pass@1**, identical prompt for
@@ -1210,7 +1275,7 @@ At the end, a single panel shows three tables:
 
 ---
 
-## Results Analysis (Jupyter notebook)
+## 📓 Results Analysis (Jupyter notebook)
 
 In addition to the files in `results/`, the project includes an **analysis notebook** that loads all
 the results, produces the **summary tables** and the **charts** (*ggplot* style via **plotnine**)
@@ -1597,7 +1662,7 @@ The overall picture can be summarized in five points.
 
 ---
 
-## Pause and Resume
+## ⏸️ Pause and Resume
 
 Execution can be interrupted and resumed without re-paying for queries already spent:
 
@@ -1611,7 +1676,7 @@ Execution can be interrupted and resumed without re-paying for queries already s
 
 ---
 
-## Error Analysis
+## 🧯 Error Analysis
 
 When a problem does not pass (pass@1 = 0), the failure is **categorized**, so as to understand *how*
 the model goes wrong, not just *how much*. The error distribution is one of the three tables in the
@@ -1659,13 +1724,13 @@ go from the most specific to the most generic, with a `RuntimeError` fallback.
 
 ---
 
-## RAG
+## 🧠 RAG
 
 > 🚧 **Work in progress.**
 
 ---
 
-## References
+## 📚 References
 
 ```bibtex
 @article{chen2021evaluating,
@@ -1720,7 +1785,13 @@ go from the most specific to the most generic, with a `RuntimeError` fallback.
 
 ---
 
-## License
+## 📄 License
 
 This project is intended for educational and research purposes. It is distributed under the **MIT**
 license. Use of the Anthropic APIs is subject to their Terms of Service.
+
+---
+
+<div align="center">
+🇮🇹 <a href="README.md">Leggi in italiano</a>
+</div>

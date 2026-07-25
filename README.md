@@ -24,11 +24,18 @@
   <img src="https://img.shields.io/badge/Matplotlib-grafici-11557C?logo=python&logoColor=white" alt="Matplotlib">
 </p>
 
+<p align="center">
+  Confronta le capacità di <b>generazione di codice</b> di tre architetture: un <b>LLM denso</b> (Claude Opus 4.7), un <b>Mixture of Experts</b> (DeepSeek V4 Pro) e uno <b>Small Language Model</b> (Ministral 8B),<br>
+  su <b>5 benchmark</b> (HumanEval &middot; MBPP &middot; DS-1000 &middot; Plot2Code &middot; MultiPL-E) e <b>15 linguaggi</b> di programmazione.<br>
+  Misura il <b>pass@1</b> (correttezza funzionale) e il <b>CodeBLEU</b> (somiglianza strutturale), tracciando <b>token, costo</b> e <b>tipologie di errore</b>.<br>
+  Un'unica <b>CLI</b> scarica i dataset, genera, valuta ed <b>esporta i risultati</b> in CSV/XLSX, con <b>notebook di analisi</b> e grafici.
+</p>
+
 </div>
 
 ```bash
-git clone https://github.com/Imkun-on/code-generation-benchmark.git
-cd code-generation-benchmark
+git clone https://github.com/Imkun-on/codegen_arena.git
+cd codegen_arena
 pip install -r requirements.txt
 python cli.py
 ```
@@ -37,34 +44,92 @@ python cli.py
 
 ---
 
-## Table of Contents
+## 📖 Indice
 
-- [Descrizione del Progetto](#descrizione-del-progetto)
-- [Architetture a confronto: LLM, MoE e SLM](#architetture-a-confronto-llm-moe-e-slm)
-- [Requisiti & Installazione](#requisiti--installazione)
-- [Come si Usa](#come-si-usa)
-- [Struttura del Progetto](#struttura-del-progetto)
-- [Benchmark: HumanEval](#benchmark-humaneval)
-- [Benchmark: MBPP](#benchmark-mbpp)
-- [Benchmark: DS-1000](#benchmark-ds-1000)
-- [Benchmark: Plot2Code](#benchmark-plot2code)
-- [Benchmark: MultiPL-E (multilinguaggio)](#benchmark-multipl-e-multilinguaggio)
-- [Prompting: Directional Stimulus (DSP)](#prompting-directional-stimulus-dsp)
-- [Metriche di Valutazione](#metriche-di-valutazione)
-  - [pass@1](#pass1)
-  - [CodeBLEU](#codebleu)
-- [Output dei Risultati](#output-dei-risultati)
-- [Findings (risultati)](#findings-risultati)
-- [Analisi dei Risultati (notebook Jupyter)](#analisi-dei-risultati-notebook-jupyter)
-- [Pausa e Ripresa](#pausa-e-ripresa)
-- [Analisi degli Errori](#analisi-degli-errori)
-- [RAG](#rag)
-- [Riferimenti](#riferimenti)
-- [License](#license)
+**Capitolo 1 — [📋 Descrizione del Progetto](#-descrizione-del-progetto)**
+
+**Capitolo 2 — [🏗️ Architetture a confronto: LLM, MoE e SLM](#-architetture-a-confronto-llm-moe-e-slm)**
+- 2.1 [LLM denso (Claude Opus 4.7)](#llm-denso-claude-opus-47)
+- 2.2 [Mixture of Experts (DeepSeek V4 Pro)](#mixture-of-experts-deepseek-v4-pro)
+- 2.3 [Small Language Model (Ministral 8B)](#small-language-model-ministral-8b)
+- 2.4 [Confronto visivo delle tre architetture](#confronto-visivo-delle-tre-architetture)
+- 2.5 [Confronto sintetico](#confronto-sintetico)
+- 2.6 [Modelli e prezzi](#modelli-e-prezzi)
+
+**Capitolo 3 — [📦 Requisiti & Installazione](#-requisiti--installazione)**
+- 3.1 [Python](#python)
+- 3.2 [Installazione dipendenze](#installazione-dipendenze)
+- 3.3 [Configurazione della API Key](#configurazione-della-api-key)
+
+**Capitolo 4 — [🚀 Come si Usa](#-come-si-usa)**
+- 4.1 [Configurazione dell'inferenza](#configurazione-dellinferenza)
+
+**Capitolo 5 — [🗂️ Struttura del Progetto](#-struttura-del-progetto)**
+
+**Capitolo 6 — [🧩 Benchmark: HumanEval](#-benchmark-humaneval)**
+- 6.1 [Struttura del Dataset](#struttura-del-dataset)
+- 6.2 [Colonna derivata: `codice_completo`](#colonna-derivata-codice_completo)
+- 6.3 [Nota Windows sul caricamento](#nota-windows-sul-caricamento)
+
+**Capitolo 7 — [🧩 Benchmark: MBPP](#-benchmark-mbpp)**
+- 7.1 [Esempio (problema `task_id 12`)](#esempio-problema-task_id-12)
+- 7.2 [Quale parte di MBPP usiamo](#quale-parte-di-mbpp-usiamo)
+- 7.3 [Perché `full` e NON `sanitized`](#perché-full-e-non-sanitized)
+- 7.4 [Struttura del Dataset (config `full`)](#struttura-del-dataset-config-full)
+
+**Capitolo 8 — [📊 Benchmark: DS-1000](#-benchmark-ds-1000)**
+- 8.1 [Struttura del Dataset](#struttura-del-dataset-1)
+- 8.2 [Esempio (libreria Numpy, formato *Completion*)](#esempio-libreria-numpy-formato-completion)
+- 8.3 [Due formati di risposta: Completion e Insertion](#due-formati-di-risposta-completion-e-insertion)
+- 8.4 [Esecuzione e librerie installate](#esecuzione-e-librerie-installate)
+
+**Capitolo 9 — [📈 Benchmark: Plot2Code](#-benchmark-plot2code)**
+- 9.1 [Struttura del Dataset](#struttura-del-dataset-2)
+- 9.2 [Esempio](#esempio)
+- 9.3 [Metriche di Plot2Code](#metriche-di-plot2code)
+
+**Capitolo 10 — [🌐 Benchmark: MultiPL-E (multilinguaggio)](#-benchmark-multipl-e-multilinguaggio)**
+- 10.1 [Struttura del Dataset (per config `humaneval-<lang>`)](#struttura-del-dataset-per-config-humaneval-lang)
+- 10.2 [Esempio (config `humaneval-js`)](#esempio-config-humaneval-js)
+- 10.3 [Linguaggi e toolchain (il pass@1 richiede il runtime installato)](#linguaggi-e-toolchain-il-pass1-richiede-il-runtime-installato)
+
+**Capitolo 11 — [🎯 Prompting: Directional Stimulus (DSP)](#-prompting-directional-stimulus-dsp)**
+
+**Capitolo 12 — [📏 Metriche di Valutazione](#-metriche-di-valutazione)**
+- 12.1 [pass@1](#pass1)
+- 12.2 [CodeBLEU](#codebleu)
+
+**Capitolo 13 — [💾 Output dei Risultati](#-output-dei-risultati)**
+- 13.1 [Colonne del dettaglio (CSV / XLSX)](#colonne-del-dettaglio-csv--xlsx)
+- 13.2 [Riepilogo a schermo](#riepilogo-a-schermo)
+
+**Capitolo 14 — [🔍 Findings (risultati)](#-findings-risultati)**
+- 14.1 [pass@1 per modello e benchmark](#pass1-per-modello-e-benchmark)
+
+**Capitolo 15 — [📓 Analisi dei Risultati (notebook Jupyter)](#-analisi-dei-risultati-notebook-jupyter)**
+- 15.1 [Quale modello risolve più problemi al primo tentativo?](#quale-modello-risolve-più-problemi-al-primo-tentativo)
+- 15.2 [Un codice corretto deve somigliare alla soluzione di riferimento?](#un-codice-corretto-deve-somigliare-alla-soluzione-di-riferimento)
+- 15.3 [Dove sbagliano i modelli: le tipologie di errore](#dove-sbagliano-i-modelli-le-tipologie-di-errore)
+- 15.4 [I problemi falliti da Claude possono essere risolti da modelli più deboli?](#i-problemi-falliti-da-claude-possono-essere-risolti-da-modelli-più-deboli)
+- 15.5 [MultiPL-E: in quali linguaggi i modelli rendono meglio?](#multipl-e-in-quali-linguaggi-i-modelli-rendono-meglio)
+- 15.6 [Plot2Code: quanto la figura generata somiglia a quella di riferimento?](#plot2code-quanto-la-figura-generata-somiglia-a-quella-di-riferimento)
+- 15.7 [Conclusioni](#conclusioni)
+
+**Capitolo 16 — [⏸️ Pausa e Ripresa](#-pausa-e-ripresa)**
+
+**Capitolo 17 — [🧯 Analisi degli Errori](#-analisi-degli-errori)**
+- 17.1 [Categorie (Python: HumanEval, MBPP, DS-1000, Plot2Code)](#categorie-python-humaneval-mbpp-ds-1000-plot2code)
+- 17.2 [Categorie per i linguaggi non-Python (MultiPL-E)](#categorie-per-i-linguaggi-non-python-multipl-e)
+
+**Capitolo 18 — [🧠 RAG](#-rag)**
+
+**Capitolo 19 — [📚 Riferimenti](#-riferimenti)**
+
+**Capitolo 20 — [📄 License](#-license)**
 
 ---
 
-## Descrizione del Progetto
+## 📋 Descrizione del Progetto
 
 Questo progetto confronta le capacità di **generazione di codice** di tre modelli linguistici
 appartenenti a famiglie architetturali diverse: un **LLM denso** di frontiera (Claude Opus 4.7),
@@ -73,7 +138,7 @@ L'interesse non è stabilire quale prodotto commerciale sia migliore, ma osserva
 comportano le tre **architetture** sullo stesso compito, a prescindere dalle differenze nei dati
 di addestramento, nel numero di parametri e nelle scelte di ottimizzazione dei singoli provider.
 Le tre architetture sono descritte nella sezione
-[Architetture a confronto](#architetture-a-confronto-llm-moe-e-slm).
+[Architetture a confronto](#-architetture-a-confronto-llm-moe-e-slm).
 
 La valutazione impiega **cinque benchmark**: quattro di essi (HumanEval, MBPP, DS-1000 e
 Plot2Code) sono incentrati sul linguaggio **Python**, mentre **MultiPL-E** estende il confronto a
@@ -115,7 +180,7 @@ Due note sui benchmark meno convenzionali:
 
 ---
 
-## Architetture a confronto: LLM, MoE e SLM
+## 🏗️ Architetture a confronto: LLM, MoE e SLM
 
 Tutti e tre i modelli condividono la stessa base: il **Transformer decoder-only**, addestrato in
 pre-training a predire il token successivo su grandi corpora di testo e codice, e successivamente
@@ -202,7 +267,7 @@ non un campionato tra brand):
 
 ---
 
-## Requisiti & Installazione
+## 📦 Requisiti & Installazione
 
 ### Python
 
@@ -308,7 +373,7 @@ export MISTRAL_API_KEY="la-tua-api-key"
 
 ---
 
-## Come si Usa
+## 🚀 Come si Usa
 
 L'entrypoint è `cli.py` (equivalente a `python -m model.claude`). La CLI è costruita con
 **Typer**: l'`--help` è formattato da **Rich** (opzioni raggruppate in pannelli) e ogni opzione ha
@@ -378,12 +443,12 @@ I parametri di generazione stanno in `model/config.py`:
 
 ---
 
-## Struttura del Progetto
+## 🗂️ Struttura del Progetto
 
 `model/` è un **namespace package** (volutamente senza `__init__.py`), con file piatti:
 
 ```
-code-generation-benchmark/
+codegen_arena/
 ├── cli.py                  # entrypoint: parsing argomenti + run_benchmark
 ├── requirements.txt
 ├── Benchmark/humaneval/    # dataset HumanEval salvato in locale (save_to_disk)
@@ -425,7 +490,7 @@ code-generation-benchmark/
 
 ---
 
-## Benchmark: HumanEval
+## 🧩 Benchmark: HumanEval
 
 <table>
 <tr>
@@ -517,7 +582,7 @@ limite di 260 caratteri di Windows.
 
 ---
 
-## Benchmark: MBPP
+## 🧩 Benchmark: MBPP
 
 <table>
 <tr>
@@ -641,7 +706,7 @@ al primo run e riletto da lì in seguito.
 
 ---
 
-## Benchmark: DS-1000
+## 📊 Benchmark: DS-1000
 
 <table>
 <tr>
@@ -766,7 +831,7 @@ run e riletto da lì in seguito.
 
 ---
 
-## Benchmark: Plot2Code
+## 📈 Benchmark: Plot2Code
 
 <table>
 <tr>
@@ -853,7 +918,7 @@ riuscito**. Tre segnali, salvati nel file di output:
 
 ---
 
-## Benchmark: MultiPL-E (multilinguaggio)
+## 🌐 Benchmark: MultiPL-E (multilinguaggio)
 
 <table>
 <tr>
@@ -1011,7 +1076,7 @@ primo run e riletto da lì in seguito.
 
 ---
 
-## Prompting: Directional Stimulus (DSP)
+## 🎯 Prompting: Directional Stimulus (DSP)
 
 Il prompting segue **Directional Stimulus Prompting** (Li et al., 2023): oltre a un'istruzione
 fissa, **ogni problema** riceve piccoli *stimoli direzionali* estratti localmente dall'enunciato
@@ -1045,7 +1110,7 @@ modello, disobbedendo, racchiuda la risposta in un blocco ```` ```python ````).
 
 ---
 
-## Metriche di Valutazione
+## 📏 Metriche di Valutazione
 
 Teniamo **due** metriche complementari: una funzionale (il codice è corretto?) e una strutturale
 (quanto somiglia alla soluzione di riferimento?).
@@ -1117,7 +1182,7 @@ Usiamo pesi uniformi `(0.25, 0.25, 0.25, 0.25)`.
 
 ---
 
-## Output dei Risultati
+## 💾 Output dei Risultati
 
 Ad ogni run i risultati finiscono in una **sottocartella per benchmark**: `results/humaneval/`,
 `results/mbpp/`, `results/ds1000/`, `results/plot2code/` o `results/multipl-e/` (così i benchmark non
@@ -1198,7 +1263,7 @@ Al termine, un unico pannello mostra tre tabelle:
 
 ---
 
-## Findings (risultati)
+## 🔍 Findings (risultati)
 
 > ✅ **Run completati** sui tre modelli a confronto. Setup di misura: `effort=low`,
 > `thinking=disabled`, `temperature=0.0` (non-Claude), **pass@1 deterministico**, prompt identico
@@ -1218,7 +1283,7 @@ Al termine, un unico pannello mostra tre tabelle:
 
 ---
 
-## Analisi dei Risultati (notebook Jupyter)
+## 📓 Analisi dei Risultati (notebook Jupyter)
 
 Oltre ai file in `results/`, il progetto include un **notebook di analisi** che carica tutti i
 risultati, produce le **tabelle riassuntive** e i **grafici** (stile *ggplot* via **plotnine**)
@@ -1610,7 +1675,7 @@ Il quadro complessivo si può riassumere in cinque punti.
 
 ---
 
-## Pausa e Ripresa
+## ⏸️ Pausa e Ripresa
 
 L'esecuzione è interrompibile e riprendibile senza ripagare le query già spese:
 
@@ -1624,7 +1689,7 @@ L'esecuzione è interrompibile e riprendibile senza ripagare le query già spese
 
 ---
 
-## Analisi degli Errori
+## 🧯 Analisi degli Errori
 
 Quando un problema non passa (pass@1 = 0), il fallimento viene **categorizzato**, così da capire
 *come* il modello sbaglia, non solo *quanto*. La distribuzione degli errori è una delle tre tabelle
@@ -1672,13 +1737,13 @@ vanno dal più specifico al più generico, con fallback `RuntimeError`.
 
 ---
 
-## RAG
+## 🧠 RAG
 
 > 🚧 **In corso.**
 
 ---
 
-## Riferimenti
+## 📚 Riferimenti
 
 ```bibtex
 @article{chen2021evaluating,
@@ -1733,7 +1798,13 @@ vanno dal più specifico al più generico, con fallback `RuntimeError`.
 
 ---
 
-## License
+## 📄 License
 
 Questo progetto è destinato a scopi educativi e di ricerca. È distribuito sotto licenza **MIT**.
 L'uso delle API di Anthropic è soggetto ai loro Termini di Servizio.
+
+---
+
+<div align="center">
+🇬🇧 <a href="ReadENG.md">Read this in English</a>
+</div>
