@@ -37,7 +37,6 @@
 git clone https://github.com/Imkun-on/codegen_arena.git
 cd codegen_arena
 pip install -r requirements.txt
-python cli.py
 ```
 
 > ℹ️ On the first run the benchmark datasets are downloaded automatically from Hugging Face and saved into the `Benchmark/` folder (an internet connection is required). On later runs they are read from there, with no re-download.
